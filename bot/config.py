@@ -16,6 +16,7 @@ class Settings(BaseSettings):
         command_prefix: Prefix used for text commands.
         log_level: Root log level.
         global_command_channel_id: Channel where generation commands are allowed.
+        private_voice_hub_id: Voice channel that creates private calls.
     """
 
     model_config = SettingsConfigDict(
@@ -30,6 +31,10 @@ class Settings(BaseSettings):
     global_command_channel_id: int = Field(
         default=1498085284410298590,
         alias="GLOBAL_COMMAND_CHANNEL_ID",
+    )
+    private_voice_hub_id: int = Field(
+        default=1498213727932256308,
+        alias="PRIVATE_VOICE_HUB_ID",
     )
 
 

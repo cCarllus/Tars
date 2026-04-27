@@ -12,9 +12,13 @@ from bot.logger import configure_logging, logger
 COGS_PACKAGE = "bot.cogs"
 COGS_PATH = Path(__file__).parent / "cogs"
 INVITE_PERMISSIONS = discord.Permissions(
+    connect=True,
+    manage_channels=True,
+    move_members=True,
     view_channel=True,
     send_messages=True,
     read_message_history=True,
+    speak=True,
 )
 
 
@@ -113,6 +117,7 @@ def create_bot() -> TarsBot:
 
     intents = discord.Intents.default()
     intents.message_content = True
+    intents.voice_states = True
 
     bot = TarsBot(command_prefix=settings.command_prefix, intents=intents)
     bot.remove_command("help")
