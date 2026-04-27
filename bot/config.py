@@ -15,6 +15,7 @@ class Settings(BaseSettings):
         discord_token: Token used to authenticate with Discord.
         command_prefix: Prefix used for text commands.
         log_level: Root log level.
+        global_command_channel_id: Channel where generation commands are allowed.
     """
 
     model_config = SettingsConfigDict(
@@ -26,6 +27,10 @@ class Settings(BaseSettings):
     discord_token: str = Field(alias="DISCORD_TOKEN")
     command_prefix: str = Field(default="/", alias="COMMAND_PREFIX")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
+    global_command_channel_id: int = Field(
+        default=1498085284410298590,
+        alias="GLOBAL_COMMAND_CHANNEL_ID",
+    )
 
 
 @lru_cache
