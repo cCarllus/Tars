@@ -3,170 +3,274 @@
 {% block title %}Configurações | TARS Dashboard{% endblock %}
 
 {% block content %}
-  <div class="mb-6 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-    <div>
-      <h1 class="text-3xl font-semibold text-zinc-50">Configurações</h1>
-      <p class="mt-1 text-sm text-zinc-400">Banco: SQLite compartilhado com o bot</p>
+  <header class="sticky top-0 z-50 border-b border-white/10 bg-[#0A0A0A]/80 backdrop-blur-md">
+    <div class="mx-auto flex max-w-[90rem] items-center justify-between gap-6 px-6 py-4">
+      <div class="flex items-center gap-4">
+        <a
+          class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 shadow-[0_0_15px_rgba(6,182,212,0.3)]"
+          href="{{ url_for('config.dashboard') }}"
+          aria-label="TARS Dashboard"
+        >
+          <i data-lucide="bot" class="h-6 w-6 text-white" stroke-width="1.5"></i>
+        </a>
+        <div>
+          <h1 class="text-2xl font-semibold leading-tight tracking-tight text-white">Configurações</h1>
+          <p class="text-base text-gray-500">Banco: SQLite compartilhado com o bot</p>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center justify-end gap-3 text-base text-gray-400">
+        <span class="hidden items-center gap-2 sm:flex">
+          <i data-lucide="clock" class="h-4 w-4" stroke-width="1.5"></i>
+          Atualizado em {{ config.updated_at.strftime("%d/%m/%Y %H:%M") }}
+        </span>
+        {% if session.get("discord_user_id") %}
+          <form method="post" action="{{ url_for('auth.logout') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button
+              class="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-gray-300 transition-colors hover:border-white/20 hover:text-white"
+              type="submit"
+            >
+              <i data-lucide="log-out" class="h-4 w-4" stroke-width="1.5"></i>
+              Sair
+            </button>
+          </form>
+        {% endif %}
+      </div>
     </div>
-    <div class="text-sm text-zinc-400">
-      Atualizado em {{ config.updated_at.strftime("%d/%m/%Y %H:%M") }}
-    </div>
-  </div>
+  </header>
 
-  <form
-    method="post"
-    action="{{ url_for('config.save_dashboard') }}"
-    class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]"
-  >
+  <form method="post" action="{{ url_for('config.save_dashboard') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-    <div class="space-y-6">
-      <section class="rounded border border-zinc-800 bg-zinc-900 p-5">
-        <h2 class="text-lg font-semibold text-cyan-100">Servidor</h2>
-        <div class="mt-4 grid gap-4 md:grid-cols-2">
-          <label class="block">
-            <span class="text-sm text-zinc-300">ID do servidor</span>
-            <input class="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:border-cyan-300" name="guild_id" value="{{ config.guild_id or tars_guild_id }}" inputmode="numeric" required>
-          </label>
-          <label class="block">
-            <span class="text-sm text-zinc-300">ID do dono</span>
-            <input class="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:border-cyan-300" name="owner_user_id" value="{{ config.owner_user_id or owner_user_id }}" inputmode="numeric" required>
-          </label>
-        </div>
-      </section>
+    <div class="mx-auto max-w-[90rem] px-6 py-8">
+      <div class="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
+        <aside class="static mb-8 lg:sticky lg:top-[88px] lg:col-span-3 lg:mb-0 xl:col-span-2">
+          <nav class="flex flex-col gap-1">
+            {{ nav_item("#servidor", "server", "Servidor", "text-gray-400", true) }}
+            {{ nav_item("#welcome", "user-plus", "Welcome", "text-cyan-400") }}
+            {{ nav_item("#leave", "user-minus", "Leave", "text-red-400") }}
+            {{ nav_item("#canais", "radio", "Canais e cargos", "text-amber-400") }}
+            {{ nav_item("#moderacao", "shield-alert", "Auto-moderação", "text-purple-400") }}
+            {{ nav_item("#xp", "zap", "XP", "text-blue-400") }}
+          </nav>
+        </aside>
 
-      <section class="rounded border border-zinc-800 bg-zinc-900 p-5">
-        <h2 class="text-lg font-semibold text-cyan-100">Welcome</h2>
-        <div class="mt-4 grid gap-4 md:grid-cols-2">
-          {{ toggle("welcome_enabled", "Ativo", config.welcome.enabled) }}
-          {{ input("welcome_channel_id", "Canal", config.welcome.channel_id) }}
-          {{ color("welcome_embed_color", "Cor", "#%06x"|format(config.welcome.embed_color)) }}
-        </div>
-        {{ textarea("welcome_message_template", "Mensagem", config.welcome.message_template) }}
-      </section>
-
-      <section class="rounded border border-zinc-800 bg-zinc-900 p-5">
-        <h2 class="text-lg font-semibold text-cyan-100">Leave</h2>
-        <div class="mt-4 grid gap-4 md:grid-cols-2">
-          {{ toggle("leave_enabled", "Ativo", config.leave.enabled) }}
-          {{ input("leave_channel_id", "Canal", config.leave.channel_id) }}
-          {{ color("leave_embed_color", "Cor", "#%06x"|format(config.leave.embed_color)) }}
-        </div>
-        {{ textarea("leave_message_template", "Mensagem", config.leave.message_template) }}
-      </section>
-
-      <section class="rounded border border-zinc-800 bg-zinc-900 p-5">
-        <h2 class="text-lg font-semibold text-cyan-100">Canais e cargos</h2>
-        <div class="mt-4 grid gap-4 md:grid-cols-2">
-          {{ input("logs_channel_id", "Canal de logs", config.logs.channel_id) }}
-          <label class="block">
-            <span class="text-sm text-zinc-300">Nível de logs</span>
-            <select class="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:border-cyan-300" name="logs_detail_level">
-              <option value="1" {% if config.logs.detail_level == 1 %}selected{% endif %}>Básico</option>
-              <option value="2" {% if config.logs.detail_level == 2 %}selected{% endif %}>Normal</option>
-              <option value="3" {% if config.logs.detail_level == 3 %}selected{% endif %}>Detalhado</option>
-            </select>
-          </label>
-          {{ toggle("auto_role_enabled", "Cargo automático", config.auto_role.enabled) }}
-          {{ input("auto_role_id", "Cargo automático", config.auto_role.role_id) }}
-        </div>
-      </section>
-
-      <section class="rounded border border-zinc-800 bg-zinc-900 p-5">
-        <h2 class="text-lg font-semibold text-cyan-100">Auto-moderação</h2>
-        <div class="mt-4 grid gap-4 md:grid-cols-2">
-          {{ toggle("auto_mod_enabled", "Ativo", config.auto_mod.enabled) }}
-          {{ toggle("auto_mod_block_links", "Bloquear links", config.auto_mod.block_links) }}
-          {{ toggle("auto_mod_dm_owner_on_action", "Alertar dono", config.auto_mod.dm_owner_on_action) }}
-        </div>
-        {{ textarea("auto_mod_blocked_words", "Palavras bloqueadas", config.auto_mod.blocked_words|join("\n")) }}
-        {{ textarea("auto_mod_allowed_links", "Domínios permitidos", config.auto_mod.allowed_links|join("\n")) }}
-      </section>
-
-      <section class="rounded border border-zinc-800 bg-zinc-900 p-5">
-        <h2 class="text-lg font-semibold text-cyan-100">XP</h2>
-        <div class="mt-4 grid gap-4 md:grid-cols-2">
-          {{ toggle("leveling_enabled", "Ativo", config.leveling.enabled) }}
-          {{ number("leveling_message_xp", "XP por mensagem", config.leveling.message_xp) }}
-          {{ number("leveling_message_cooldown_seconds", "Cooldown", config.leveling.message_cooldown_seconds) }}
-          {{ number("leveling_voice_xp_per_minute", "XP por minuto em voz", config.leveling.voice_xp_per_minute) }}
-          {{ number("leveling_level_xp_factor", "XP por nível", config.leveling.level_xp_factor) }}
-        </div>
-      </section>
-    </div>
-
-    <aside class="space-y-6 lg:sticky lg:top-20 lg:self-start">
-      <section class="rounded border border-cyan-400/20 bg-zinc-900 p-5">
-        <div class="mb-4 flex items-center justify-between">
-          <h2 class="text-lg font-semibold text-cyan-100">Preview</h2>
-          <button
-            class="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:border-cyan-300"
-            type="button"
-            hx-post="{{ url_for('config.preview_dashboard') }}"
-            hx-include="closest form"
-            hx-target="#embed-preview"
-            hx-swap="innerHTML"
-          >
-            Atualizar
-          </button>
-        </div>
-        <div id="embed-preview">
-          {% include "partials/embed_preview.html" %}
-        </div>
-      </section>
-
-      <section class="rounded border border-zinc-800 bg-zinc-900 p-5">
-        <h2 class="text-lg font-semibold text-cyan-100">Auditoria</h2>
-        <div class="mt-4 space-y-3">
-          {% for event in audit_events %}
-            <div class="rounded border border-zinc-800 bg-zinc-950 p-3 text-sm">
-              <div class="font-medium text-zinc-200">{{ event.event_type }}</div>
-              <div class="mt-1 text-xs text-zinc-500">{{ event.created_at }}</div>
+        <div class="space-y-6 lg:col-span-5 xl:col-span-7">
+          <section class="relative overflow-hidden rounded-2xl border border-white/10 bg-[#111] p-6 shadow-sm" id="servidor">
+            <div class="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent"></div>
+            {{ section_title("server", "Servidor", "text-gray-400") }}
+            <div class="relative z-10 grid grid-cols-1 gap-6 md:grid-cols-2">
+              {{ text_input("guild_id", "ID do servidor", config.guild_id or tars_guild_id, true) }}
+              {{ text_input("owner_user_id", "ID do dono", config.owner_user_id or owner_user_id, true) }}
             </div>
-          {% else %}
-            <p class="text-sm text-zinc-500">Sem eventos registrados.</p>
-          {% endfor %}
-        </div>
-      </section>
+          </section>
 
-      <button class="w-full rounded bg-cyan-300 px-4 py-3 font-semibold text-zinc-950 hover:bg-cyan-200" type="submit">
-        Salvar
-      </button>
-    </aside>
+          <section class="relative overflow-hidden rounded-2xl border border-white/10 bg-[#111] p-6 shadow-sm" id="welcome">
+            <div class="pointer-events-none absolute inset-0 bg-gradient-to-br from-cyan-500/[0.02] to-transparent"></div>
+            {{ section_title("user-plus", "Welcome", "text-cyan-400") }}
+            <div class="relative z-10 space-y-6">
+              <div class="grid grid-cols-1 items-end gap-6 md:grid-cols-[1fr_2fr]">
+                {{ toggle("welcome_enabled", "Ativo", config.welcome.enabled) }}
+                {{ text_input("welcome_channel_id", "Canal", config.welcome.channel_id) }}
+              </div>
+              {{ color_input("welcome_embed_color", "Cor", "#%06x"|format(config.welcome.embed_color)) }}
+              {{ textarea("welcome_message_template", "Mensagem", config.welcome.message_template, 4) }}
+            </div>
+          </section>
+
+          <section class="relative overflow-hidden rounded-2xl border border-white/10 bg-[#111] p-6 shadow-sm" id="leave">
+            <div class="pointer-events-none absolute inset-0 bg-gradient-to-br from-red-500/[0.02] to-transparent"></div>
+            {{ section_title("user-minus", "Leave", "text-red-400") }}
+            <div class="relative z-10 space-y-6">
+              <div class="grid grid-cols-1 items-end gap-6 md:grid-cols-[1fr_2fr]">
+                {{ toggle("leave_enabled", "Ativo", config.leave.enabled) }}
+                {{ text_input("leave_channel_id", "Canal", config.leave.channel_id) }}
+              </div>
+              {{ color_input("leave_embed_color", "Cor", "#%06x"|format(config.leave.embed_color)) }}
+              {{ textarea("leave_message_template", "Mensagem", config.leave.message_template, 3) }}
+            </div>
+          </section>
+
+          <section class="rounded-2xl border border-white/10 bg-[#111] p-6 shadow-sm" id="canais">
+            {{ section_title("radio", "Canais e cargos", "text-amber-400") }}
+            <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+              {{ text_input("logs_channel_id", "Canal de logs", config.logs.channel_id) }}
+              <label class="block">
+                <span class="mb-2 block text-base text-gray-400">Nível de logs</span>
+                <select class="{{ field_class() }}" name="logs_detail_level">
+                  <option value="1" {% if config.logs.detail_level == 1 %}selected{% endif %}>Básico</option>
+                  <option value="2" {% if config.logs.detail_level == 2 %}selected{% endif %}>Normal</option>
+                  <option value="3" {% if config.logs.detail_level == 3 %}selected{% endif %}>Detalhado</option>
+                </select>
+              </label>
+              {{ toggle("auto_role_enabled", "Cargo automático", config.auto_role.enabled) }}
+              {{ text_input("auto_role_id", "Cargo automático", config.auto_role.role_id) }}
+            </div>
+          </section>
+
+          <section class="rounded-2xl border border-white/10 bg-[#111] p-6 shadow-sm" id="moderacao">
+            {{ section_title("shield-alert", "Auto-moderação", "text-purple-400") }}
+            <div class="space-y-6">
+              <div class="grid grid-cols-1 gap-6 md:grid-cols-3">
+                {{ toggle("auto_mod_enabled", "Ativo", config.auto_mod.enabled) }}
+                {{ toggle("auto_mod_block_links", "Bloquear links", config.auto_mod.block_links) }}
+                {{ toggle("auto_mod_dm_owner_on_action", "Alertar dono", config.auto_mod.dm_owner_on_action) }}
+              </div>
+              {{ textarea("auto_mod_blocked_words", "Palavras bloqueadas", config.auto_mod.blocked_words|join("\n"), 3) }}
+              {{ textarea("auto_mod_allowed_links", "Domínios permitidos", config.auto_mod.allowed_links|join("\n"), 3) }}
+            </div>
+          </section>
+
+          <section class="rounded-2xl border border-white/10 bg-[#111] p-6 shadow-sm" id="xp">
+            {{ section_title("zap", "XP", "text-blue-400") }}
+            <div class="space-y-6">
+              <div class="md:w-1/2">
+                {{ toggle("leveling_enabled", "Ativo", config.leveling.enabled) }}
+              </div>
+              <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                {{ number_input("leveling_message_xp", "XP por mensagem", config.leveling.message_xp) }}
+                {{ number_input("leveling_voice_xp_per_minute", "XP por minuto em voz", config.leveling.voice_xp_per_minute) }}
+                {{ number_input("leveling_message_cooldown_seconds", "Cooldown (segundos)", config.leveling.message_cooldown_seconds) }}
+                {{ number_input("leveling_level_xp_factor", "XP por nível", config.leveling.level_xp_factor) }}
+              </div>
+            </div>
+          </section>
+
+          <div class="flex justify-end pb-10 pt-4 lg:pb-0">
+            <button
+              class="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-400 to-cyan-500 px-10 py-3 text-lg font-semibold text-black shadow-[0_0_20px_rgba(6,182,212,0.2)] transition-all hover:-translate-y-0.5 hover:from-cyan-300 hover:to-cyan-400 hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] active:translate-y-0"
+              type="submit"
+            >
+              <i data-lucide="save" class="h-5 w-5" stroke-width="2"></i>
+              Salvar alterações
+            </button>
+          </div>
+        </div>
+
+        <div class="space-y-6 lg:col-span-4 xl:col-span-3">
+          <section class="rounded-2xl border border-white/10 bg-[#111] p-5 shadow-sm lg:sticky lg:top-[88px]">
+            <div class="mb-5 flex items-center justify-between gap-3">
+              <div class="flex items-center gap-2">
+                <i data-lucide="eye" class="h-4 w-4 text-gray-400" stroke-width="1.5"></i>
+                <h2 class="text-lg font-medium tracking-tight text-white">Preview</h2>
+              </div>
+              <button
+                class="flex items-center gap-1.5 rounded-md border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-1.5 text-sm text-gray-400 transition-colors hover:text-white"
+                type="button"
+                hx-post="{{ url_for('config.preview_dashboard') }}"
+                hx-include="closest form"
+                hx-target="#embed-preview"
+                hx-swap="innerHTML"
+              >
+                <i data-lucide="refresh-cw" class="h-3.5 w-3.5" stroke-width="1.5"></i>
+                Atualizar
+              </button>
+            </div>
+            <div id="embed-preview">
+              {% include "partials/embed_preview.html" %}
+            </div>
+          </section>
+
+          <section class="rounded-2xl border border-white/10 bg-[#111] p-5 shadow-sm">
+            <div class="mb-5 flex items-center gap-2">
+              <i data-lucide="activity" class="h-4 w-4 text-gray-400" stroke-width="1.5"></i>
+              <h2 class="text-lg font-medium tracking-tight text-white">Auditoria</h2>
+            </div>
+            <div class="max-h-[600px] space-y-2 overflow-y-auto pr-2">
+              {% for event in audit_events %}
+                <div class="group cursor-default rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] p-3 transition-colors hover:border-white/20">
+                  <p class="text-base font-medium text-gray-200 transition-colors group-hover:text-cyan-400">{{ event.event_type }}</p>
+                  <p class="mt-0.5 font-mono text-sm text-gray-500">{{ event.created_at }}</p>
+                </div>
+              {% else %}
+                <p class="rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] p-3 text-sm text-gray-500">Sem eventos registrados.</p>
+              {% endfor %}
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
   </form>
+
+  <script>
+    document.querySelectorAll("[data-color-input]").forEach((input) => {
+      input.addEventListener("input", () => {
+        const swatch = input.parentElement.querySelector("[data-color-swatch]");
+        if (swatch) {
+          swatch.style.backgroundColor = input.value;
+          swatch.style.boxShadow = `0 0 10px ${input.value}44`;
+        }
+      });
+    });
+  </script>
 {% endblock %}
 
-{% macro input(name, label, value) -%}
+{% macro nav_item(href, icon, label, icon_color, active=false) -%}
+  <a
+    href="{{ href }}"
+    class="flex items-center gap-3 rounded-xl border px-4 py-3 font-medium transition-all {% if active %}border-white/10 bg-[#111] text-white shadow-sm{% else %}border-transparent text-gray-400 hover:border-white/5 hover:bg-[#111]/50 hover:text-white{% endif %}"
+  >
+    <i data-lucide="{{ icon }}" class="h-5 w-5 {{ icon_color }}" stroke-width="1.5"></i>
+    {{ label }}
+  </a>
+{%- endmacro %}
+
+{% macro section_title(icon, label, icon_color) -%}
+  <div class="mb-6 flex items-center gap-3">
+    <i data-lucide="{{ icon }}" class="h-5 w-5 {{ icon_color }}" stroke-width="1.5"></i>
+    <h2 class="text-xl font-medium tracking-tight text-white">{{ label }}</h2>
+  </div>
+{%- endmacro %}
+
+{% macro field_class() -%}
+  w-full rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-4 py-3 text-base text-gray-200 shadow-inner outline-none transition-all focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20
+{%- endmacro %}
+
+{% macro text_input(name, label, value, required=false) -%}
   <label class="block">
-    <span class="text-sm text-zinc-300">{{ label }}</span>
-    <input class="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:border-cyan-300" name="{{ name }}" value="{{ value or '' }}" inputmode="numeric">
+    <span class="mb-2 block text-base text-gray-400">{{ label }}</span>
+    <input class="{{ field_class() }}" name="{{ name }}" value="{{ value or '' }}" inputmode="numeric" {% if required %}required{% endif %}>
   </label>
 {%- endmacro %}
 
-{% macro number(name, label, value) -%}
+{% macro number_input(name, label, value) -%}
   <label class="block">
-    <span class="text-sm text-zinc-300">{{ label }}</span>
-    <input class="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:border-cyan-300" name="{{ name }}" value="{{ value }}" type="number" min="0">
+    <span class="mb-2 block text-base text-gray-400">{{ label }}</span>
+    <input class="{{ field_class() }}" name="{{ name }}" value="{{ value }}" type="number" min="0">
   </label>
 {%- endmacro %}
 
-{% macro color(name, label, value) -%}
-  <label class="block">
-    <span class="text-sm text-zinc-300">{{ label }}</span>
-    <input class="mt-1 h-10 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 outline-none focus:border-cyan-300" name="{{ name }}" value="{{ value }}" type="color">
+{% macro color_input(name, label, value) -%}
+  <label class="relative block cursor-pointer md:w-1/2">
+    <span class="mb-2 block text-base text-gray-400">{{ label }}</span>
+    <input class="absolute inset-x-0 bottom-0 h-6 cursor-pointer opacity-0" data-color-input name="{{ name }}" value="{{ value }}" type="color">
+    <span
+      class="block h-4 w-full rounded-full border border-white/10"
+      data-color-swatch
+      style="background-color: {{ value }}; box-shadow: 0 0 10px {{ value }}44;"
+    ></span>
   </label>
 {%- endmacro %}
 
-{% macro textarea(name, label, value) -%}
-  <label class="mt-4 block">
-    <span class="text-sm text-zinc-300">{{ label }}</span>
-    <textarea class="mt-1 min-h-24 w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:border-cyan-300" name="{{ name }}">{{ value }}</textarea>
+{% macro textarea(name, label, value, rows=3) -%}
+  <label class="block">
+    <span class="mb-2 block text-base text-gray-400">{{ label }}</span>
+    <textarea class="{{ field_class() }} min-h-24 resize-y whitespace-pre-wrap" name="{{ name }}" rows="{{ rows }}">{{ value }}</textarea>
   </label>
 {%- endmacro %}
 
 {% macro toggle(name, label, checked) -%}
-  <label class="flex min-h-10 items-center justify-between gap-3 rounded border border-zinc-800 bg-zinc-950 px-3 py-2">
-    <span class="text-sm text-zinc-300">{{ label }}</span>
-    <input class="h-5 w-5 accent-cyan-300" name="{{ name }}" type="checkbox" value="1" {% if checked %}checked{% endif %}>
+  <label class="flex h-[50px] cursor-pointer items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-4">
+    <span class="text-base text-gray-300">{{ label }}</span>
+    <span class="relative flex items-center">
+      <input
+        class="peer h-5 w-5 cursor-pointer appearance-none rounded border border-[#444] bg-white/5 transition-all checked:border-cyan-500 checked:bg-cyan-500"
+        name="{{ name }}"
+        type="checkbox"
+        value="1"
+        {% if checked %}checked{% endif %}
+      >
+      <i data-lucide="check" class="pointer-events-none absolute inset-0 m-auto h-3.5 w-3.5 text-black opacity-0 peer-checked:opacity-100" stroke-width="3"></i>
+    </span>
   </label>
 {%- endmacro %}

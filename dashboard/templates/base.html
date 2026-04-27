@@ -1,40 +1,65 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="scroll-smooth scroll-pt-24">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}TARS Dashboard{% endblock %}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
-  </head>
-  <body class="min-h-screen bg-zinc-950 text-zinc-100">
-    <div class="fixed inset-x-0 top-0 border-b border-cyan-400/10 bg-zinc-950/90 backdrop-blur">
-      <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
-        <a href="{{ url_for('config.dashboard') }}" class="text-sm font-semibold tracking-wide text-cyan-200">TARS Dashboard</a>
-        {% if session.get("discord_user_id") %}
-          <form method="post" action="{{ url_for('auth.logout') }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:border-cyan-300 hover:text-cyan-100" type="submit">
-              Sair
-            </button>
-          </form>
-        {% endif %}
-      </div>
-    </div>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: #050505;
+        color: #e5e5e5;
+      }
 
-    <main class="mx-auto max-w-7xl px-4 pb-12 pt-20">
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: #0a0a0a;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: #2a2a2a;
+        border-radius: 4px;
+      }
+
+      ::-webkit-scrollbar-thumb:hover {
+        background: #3a3a3a;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen antialiased selection:bg-cyan-500/30 selection:text-cyan-200">
+    <main>
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-          <div class="mb-5 space-y-2">
+          <div class="mx-auto max-w-[90rem] px-6 pt-5">
+            <div class="space-y-2">
             {% for category, message in messages %}
-              <div class="rounded border px-4 py-3 text-sm {% if category == 'error' %}border-red-500/40 bg-red-950/50 text-red-100{% else %}border-emerald-400/30 bg-emerald-950/40 text-emerald-100{% endif %}">
+              <div class="rounded-lg border px-4 py-3 text-sm {% if category == 'error' %}border-red-500/40 bg-red-950/50 text-red-100{% else %}border-emerald-400/30 bg-emerald-950/40 text-emerald-100{% endif %}">
                 {{ message }}
               </div>
             {% endfor %}
+            </div>
           </div>
         {% endif %}
       {% endwith %}
       {% block content %}{% endblock %}
     </main>
+    <script>
+      function refreshDashboardIcons() {
+        if (window.lucide) {
+          window.lucide.createIcons();
+        }
+      }
+
+      document.addEventListener("DOMContentLoaded", refreshDashboardIcons);
+      document.body.addEventListener("htmx:afterSwap", refreshDashboardIcons);
+    </script>
   </body>
 </html>

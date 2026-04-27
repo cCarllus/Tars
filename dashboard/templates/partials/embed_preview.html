@@ -1,14 +1,14 @@
 <div class="space-y-4">
   {% for preview in previews %}
-    <article class="rounded border border-zinc-700 bg-zinc-950 p-4">
-      <div class="mb-3 flex items-center gap-3">
-        <span class="h-4 w-4 rounded-sm" style="background-color: {{ preview.color }}"></span>
-        <h3 class="text-sm font-semibold text-zinc-100">{{ preview.title }}</h3>
+    <article class="rounded-r-lg border-l-4 bg-[#2B2D31] p-4 text-base shadow-md" style="border-left-color: {{ preview.color }}">
+      <div class="mb-2 flex items-center gap-2">
+        <span class="h-2 w-2 rounded-full" style="background-color: {{ preview.color }}"></span>
+        <h3 class="font-medium text-gray-200">{{ preview.title }}</h3>
         {% if not preview.enabled %}
-          <span class="rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">inativo</span>
+          <span class="rounded bg-[#1F2025] px-2 py-0.5 text-xs text-gray-400">inativo</span>
         {% endif %}
       </div>
-      <p class="whitespace-pre-wrap text-sm leading-6 text-zinc-300">{{ preview.description }}</p>
+      <p class="whitespace-pre-wrap text-sm leading-relaxed text-gray-300">{{ preview.description }}</p>
     </article>
   {% endfor %}
 </div>
