@@ -27,10 +27,7 @@ este arquivo inteiro antes de comecar.
 │   ├── logger.py
 │   ├── database/
 │   ├── cogs/
-│   │   ├── admin/
-│   │   ├── ai/
-│   │   ├── music/
-│   │   └── schedule/
+│   │   └── __init__.py
 │   ├── views/
 │   ├── modals/
 │   ├── tasks/
@@ -91,13 +88,7 @@ Variaveis atuais:
 
 ```env
 DISCORD_TOKEN=
-COMMAND_PREFIX=$
-GEMINI_API_KEY=
-YOUTUBE_API_KEY=
-SPOTIFY_CLIENT_ID=
-SPOTIFY_CLIENT_SECRET=
-DATA_DIR=files
-SCHEDULE_FILE=files/list.txt
+COMMAND_PREFIX=/
 LOG_LEVEL=INFO
 ```
 
@@ -189,21 +180,12 @@ refactor: reorganizar embeds
 
 ## 10. Comandos Existentes
 
-Como o prefixo padrao e `$`, os comandos atuais sao:
+O bot foi resetado para comecar do zero e nao possui comandos customizados.
+Como o comando universal padrao e `/`, todo novo comando deve seguir esse
+prefixo quando for comando de texto.
 
-```text
-$play nome ou url da musica
-$pause
-$resume
-$skip
-$queue
-$agenda
-$adicionar texto da tarefa
-$remover numero_da_tarefa
-$limpar quantidade
-$start
-$finish
-```
+Ao criar comandos, adicione uma cog em `bot/cogs/` e mantenha mensagens de
+usuario em PT-BR.
 
 ## 11. Responsabilidades Dos Agentes
 

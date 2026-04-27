@@ -11,29 +11,6 @@ from bot.logger import configure_logging, logger
 
 COGS_PACKAGE = "bot.cogs"
 COGS_PATH = Path(__file__).parent / "cogs"
-OPUS_PATHS = (
-    "/opt/homebrew/lib/libopus.dylib",
-    "/usr/local/lib/libopus.dylib",
-)
-
-
-def load_opus() -> None:
-    """Load Opus on macOS when Discord voice support needs it."""
-
-    if discord.opus.is_loaded():
-        return
-
-    for opus_path in OPUS_PATHS:
-        path = Path(opus_path)
-        if not path.exists():
-            continue
-
-        try:
-            discord.opus.load_opus(str(path))
-            logger.info("Loaded Opus from %s", path)
-            return
-        except OSError:
-            logger.exception("Failed to load Opus from %s", path)
 
 
 def discover_cogs() -> list[str]:
@@ -92,10 +69,6 @@ async def async_main() -> None:
     """Start the bot."""
 
     configure_logging()
-    load_opus()
-    settings.data_dir.mkdir(parents=True, exist_ok=True)
-    settings.schedule_file.parent.mkdir(parents=True, exist_ok=True)
-    settings.schedule_file.touch(exist_ok=True)
 
     bot = create_bot()
     async with bot:

@@ -26,19 +26,9 @@ brew install ffmpeg opus
 
 ## Comandos
 
-```text
-$play nome ou url da musica
-$pause
-$resume
-$skip
-$queue
-$agenda
-$adicionar texto da tarefa
-$remover numero_da_tarefa
-$limpar quantidade
-$start
-$finish
-```
+O bot foi resetado para comecar do zero e ainda nao possui comandos customizados.
+Novos comandos devem ser adicionados como cogs em `bot/cogs/`.
+O comando universal padrao para acionar comandos de texto e `/`.
 
 ## Desenvolvimento
 
@@ -53,4 +43,3 @@ mypy .
 pytest
 python -m compileall main.py bot tests
 ```
-

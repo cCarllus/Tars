@@ -16,9 +16,6 @@ target-version = "py311"
 select = ["E", "F", "I", "B", "UP", "ASYNC", "SIM"]
 ignore = []
 
-[tool.ruff.lint.per-file-ignores]
-"bot/config.py" = ["UP007", "UP035"]
-
 [tool.mypy]
 python_version = "3.11"
 strict = true
@@ -26,15 +23,6 @@ warn_unused_ignores = true
 warn_redundant_casts = true
 warn_unused_configs = true
 plugins = ["pydantic.mypy"]
-
-[[tool.mypy.overrides]]
-module = [
-    "google.*",
-    "googleapiclient.*",
-    "spotipy.*",
-    "yt_dlp.*",
-]
-ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
