@@ -2,6 +2,12 @@
 
 Bot Discord em Python com comandos organizados por cogs.
 
+## Comando para visualizar e implementar uma spec
+
+1. Read AGENTS.md and specs/XXX_XXX_feature_spec.md
+2. Then implement the feature exactly as specified.
+3. Run the relevant tests after the implementation.
+
 ## Comecar
 
 ```bash

@@ -1,10 +1,27 @@
-# AGENTS.md - Guia Oficial para Agentes de IA
+# AGENTS.md
 
-Versao: 1.0  
-Projeto: Tars Discord Bot (Python)
+## Spec-Driven Development
 
-Qualquer agente que editar, criar ou revisar codigo neste repositorio DEVE ler
-este arquivo inteiro antes de comecar.
+All feature implementation in this project follows a Spec-Driven Development approach.
+
+## Feature Specs
+
+Before implementing any feature:
+
+1. Read the relevant spec in `specs/`.
+2. Each feature may have multiple spec files:
+   - `<id>_<feature>_feature_spec.md` (base behavior)
+   - `<id>_<feature>_patchs_spec.md` (bug fixes, optional)
+   - `<id>_<feature>_increments_spec.md` (improvements, optional)
+3. Always read the base spec first, then check for patchs and increments.
+4. Treat all specs together as the source of truth for behavior and acceptance criteria.
+5. Patchs override incorrect behavior from the base spec.
+6. Increments extend the feature without breaking existing behavior.
+7. Do not invent requirements not present in the specs.
+8. Do not rewrite the entire feature when applying small changes.
+9. Follow repository architecture and coding standards after reading the spec.
+
+---
 
 ## 1. Principios Fundamentais
 
