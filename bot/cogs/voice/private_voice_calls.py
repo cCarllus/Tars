@@ -55,7 +55,7 @@ class PrivateVoiceCalls(commands.Cog):
         """Create private calls from the hub and delete empty temporary calls."""
 
         await self._handle_hub_join(member=member, before=before, after=after)
-        await self._handle_private_call_leave(before=before)
+        await self._handle_private_call_leave(before=before, after=after)
 
     async def _handle_hub_join(
         self,
@@ -96,7 +96,15 @@ class PrivateVoiceCalls(commands.Cog):
         except discord.HTTPException:
             logger.exception("Discord API error while creating private voice call")
 
-    async def _handle_private_call_leave(self, before: discord.VoiceState) -> None:
+    async def _handle_private_call_leave(
+        self,
+        *,
+        before: discord.VoiceState,
+        after: discord.VoiceState,
+    ) -> None:
+        if before.channel == after.channel:
+            return
+
         if not isinstance(before.channel, discord.VoiceChannel):
             return
 
@@ -105,6 +113,11 @@ class PrivateVoiceCalls(commands.Cog):
         except discord.Forbidden:
             logger.exception(
                 "Missing permissions while deleting private voice call %s",
+                before.channel.id,
+            )
+        except discord.NotFound:
+            logger.info(
+                "Private voice call %s was already deleted before leave cleanup",
                 before.channel.id,
             )
         except discord.HTTPException:

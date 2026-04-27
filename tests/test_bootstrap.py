@@ -1,6 +1,7 @@
 """Smoke tests for project bootstrap behavior."""
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -144,3 +145,79 @@ def test_sqlite_database_persists_voice_sessions(
     asyncio.run(db.delete_voice_session_by_channel(789))
 
     assert asyncio.run(db.list_voice_sessions()) == []
+
+
+def test_private_voice_manager_skips_duplicate_delete(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Ensure concurrent delete requests for the same call are idempotent."""
+
+    monkeypatch.setenv("DISCORD_TOKEN", "test-token")
+
+    from bot.utils import private_voice_manager
+    from bot.utils.database import SQLiteDatabase
+    from bot.utils.private_voice_manager import PrivateVoiceManager
+
+    class FakeDatabase:
+        def __init__(self) -> None:
+            self.deleted_channels: list[int] = []
+            self.actions: list[dict[str, object]] = []
+
+        async def initialize(self) -> None:
+            return None
+
+        async def delete_voice_session_by_channel(self, channel_id: int) -> None:
+            self.deleted_channels.append(channel_id)
+
+        async def log_action(self, **kwargs: object) -> None:
+            self.actions.append(kwargs)
+
+    class FakeQueue:
+        def __init__(self) -> None:
+            self.submitted_actions: list[str] = []
+
+        async def submit(
+            self,
+            *,
+            action: str,
+            operation: Callable[[], Awaitable[bool]],
+        ) -> bool:
+            self.submitted_actions.append(action)
+            return await operation()
+
+    async def safe_delete_channel(_channel: object, *, reason: str) -> bool:
+        await asyncio.sleep(0.01)
+        return True
+
+    fake_database = FakeDatabase()
+    fake_queue = FakeQueue()
+    monkeypatch.setattr(private_voice_manager, "discord_api_queue", fake_queue)
+    monkeypatch.setattr(
+        private_voice_manager,
+        "safe_delete_channel",
+        safe_delete_channel,
+    )
+
+    manager = PrivateVoiceManager(
+        hub_channel_id=1498213727932256308,
+        db=cast(SQLiteDatabase, fake_database),
+    )
+    guild = SimpleNamespace(id=123)
+    channel = cast(discord.VoiceChannel, SimpleNamespace(id=789, guild=guild))
+    guild.get_channel = lambda channel_id: channel if channel_id == channel.id else None
+    manager._register_call(guild_id=guild.id, owner_id=456, channel_id=channel.id)
+
+    async def run_deletes() -> list[bool]:
+        return list(
+            await asyncio.gather(
+                manager.delete_call(channel=channel, reason="teste"),
+                manager.delete_call(channel=channel, reason="teste duplicado"),
+            ),
+        )
+
+    results = asyncio.run(run_deletes())
+
+    assert sorted(results) == [False, True]
+    assert fake_queue.submitted_actions == ["delete_private_voice_call"]
+    assert fake_database.deleted_channels == [channel.id]
+    assert not manager.is_private_call(channel.id)

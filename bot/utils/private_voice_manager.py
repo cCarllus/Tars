@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterable
 from dataclasses import dataclass
 
@@ -69,6 +70,8 @@ class PrivateVoiceManager:
         self.locks = locks or lock_registry
         self._calls_by_owner: dict[int, PrivateVoiceCallState] = {}
         self._owner_by_channel: dict[int, int] = {}
+        self._delete_lock = asyncio.Lock()
+        self._deleting_channel_ids: set[int] = set()
 
     async def initialize(self) -> None:
         """Initialize persistent storage for private voice calls."""
@@ -229,34 +232,76 @@ class PrivateVoiceManager:
     async def delete_if_empty(self, channel: discord.VoiceChannel) -> bool:
         """Delete a managed private call if it has no connected members."""
 
-        if not self.is_private_call(channel.id) or channel.members:
+        if not self.is_private_call(channel.id):
             return False
 
-        await self.delete_call(channel=channel, reason="Call privada vazia")
-        return True
+        current_channel = channel.guild.get_channel(channel.id)
+        if current_channel is None:
+            return await self.delete_call(
+                channel=channel,
+                reason="Call privada ausente no cache",
+            )
+
+        if not isinstance(current_channel, discord.VoiceChannel):
+            return False
+
+        if current_channel.members:
+            return False
+
+        return await self.delete_call(
+            channel=current_channel, reason="Call privada vazia"
+        )
 
     async def delete_call(
         self,
         *,
         channel: discord.VoiceChannel,
         reason: str,
-    ) -> None:
+    ) -> bool:
         """Delete a private call and remove it from runtime state."""
 
         owner_id = self._owner_by_channel.get(channel.id)
-        await discord_api_queue.submit(
-            action="delete_private_voice_call",
-            operation=lambda: safe_delete_channel(channel, reason=reason),
-        )
-        self._unregister_call(channel.id)
-        await self.database.delete_voice_session_by_channel(channel.id)
-        await self.database.log_action(
-            action="delete_private_voice_call",
-            success=True,
-            guild_id=channel.guild.id,
-            user_id=owner_id,
-        )
-        logger.info("Deleted private voice call %s: %s", channel.id, reason)
+        if owner_id is None or not await self._mark_channel_deletion(channel.id):
+            return False
+
+        cleanup_state = False
+        try:
+            current_channel = channel.guild.get_channel(channel.id)
+            if current_channel is None:
+                cleanup_state = True
+                logger.info(
+                    "Private voice call %s is already absent from Discord cache",
+                    channel.id,
+                )
+                return False
+
+            deleted = await discord_api_queue.submit(
+                action="delete_private_voice_call",
+                operation=lambda: safe_delete_channel(current_channel, reason=reason),
+            )
+            cleanup_state = True
+            return deleted
+        except Exception as exc:
+            await self.database.log_action(
+                action="delete_private_voice_call",
+                success=False,
+                guild_id=channel.guild.id,
+                user_id=owner_id,
+                error=type(exc).__name__,
+            )
+            raise
+        finally:
+            if cleanup_state:
+                try:
+                    await self._cleanup_deleted_call(
+                        channel=channel,
+                        owner_id=owner_id,
+                        reason=reason,
+                    )
+                finally:
+                    await self._unmark_channel_deletion(channel.id)
+            else:
+                await self._unmark_channel_deletion(channel.id)
 
     async def set_user_limit(
         self,
@@ -505,6 +550,42 @@ class PrivateVoiceManager:
         owner_id = self._owner_by_channel.pop(channel_id, None)
         if owner_id is not None:
             self._calls_by_owner.pop(owner_id, None)
+
+    async def _mark_channel_deletion(self, channel_id: int) -> bool:
+        async with self._delete_lock:
+            if channel_id in self._deleting_channel_ids:
+                logger.info(
+                    "Skipping duplicate private voice call deletion for %s",
+                    channel_id,
+                )
+                return False
+
+            if not self.is_private_call(channel_id):
+                return False
+
+            self._deleting_channel_ids.add(channel_id)
+            return True
+
+    async def _unmark_channel_deletion(self, channel_id: int) -> None:
+        async with self._delete_lock:
+            self._deleting_channel_ids.discard(channel_id)
+
+    async def _cleanup_deleted_call(
+        self,
+        *,
+        channel: discord.VoiceChannel,
+        owner_id: int | None,
+        reason: str,
+    ) -> None:
+        self._unregister_call(channel.id)
+        await self.database.delete_voice_session_by_channel(channel.id)
+        await self.database.log_action(
+            action="delete_private_voice_call",
+            success=True,
+            guild_id=channel.guild.id,
+            user_id=owner_id,
+        )
+        logger.info("Deleted private voice call %s: %s", channel.id, reason)
 
     def _build_initial_overwrites(
         self,

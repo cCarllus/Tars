@@ -142,12 +142,25 @@ async def safe_delete_channel(
     channel: discord.abc.GuildChannel,
     *,
     reason: str,
-) -> None:
+) -> bool:
     """Delete a channel with retry, timeout and latency logging."""
 
-    await _run_discord_operation(
+    async def operation() -> bool:
+        try:
+            await channel.delete(reason=reason)
+        except discord.NotFound as exc:
+            if _is_unknown_channel(exc):
+                logger.info(
+                    "Discord channel %s already deleted; treating delete as success",
+                    channel.id,
+                )
+                return False
+            raise
+        return True
+
+    return await _run_discord_operation(
         action="delete_channel",
-        operation=lambda: channel.delete(reason=reason),
+        operation=operation,
         guild_id=channel.guild.id,
     )
 
@@ -234,6 +247,10 @@ def _can_retry(exc: Exception) -> bool:
         return status is None or status == 429 or status >= 500
 
     return False
+
+
+def _is_unknown_channel(exc: discord.NotFound) -> bool:
+    return getattr(exc, "code", None) == 10003
 
 
 async def _sleep_before_retry(
