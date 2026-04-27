@@ -1,1 +1,10 @@
-cogs/__pycache__
+__pycache__/
+*.py[cod]
+.env
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+myenv/
+.DS_Store

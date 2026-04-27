@@ -1,42 +1,11 @@
-import os
-import discord
-from discord.ext import commands
-from dotenv import load_dotenv
+"""Compatibility entrypoint for local runs.
 
-# Load Opus for voice support on macOS if available.
-if not discord.opus.is_loaded():
-    for path in ("/opt/homebrew/lib/libopus.dylib", "/usr/local/lib/libopus.dylib"):
-        if os.path.exists(path):
-            try:
-                discord.opus.load_opus(path)
-            except Exception:
-                pass
-            break
+Prefer running the bot with:
 
-load_dotenv()
+    python -m bot.main
+"""
 
-DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
+from bot.main import main
 
-intents = discord.Intents.default()
-intents.message_content = True
-
-client = commands.Bot(command_prefix='$', intents=intents)
-client.remove_command('help')
-
-# Carrega as cogs
-@client.event
-async def on_ready():
-    print('Logged on as {0}!'.format(client.user))
-    await client.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="your commands"))
-    for filename in os.listdir('./cogs'):
-        if filename.endswith('.py'):
-            await client.load_extension(f'cogs.{filename[:-3]}')
-    print('All cogs loaded!')
-
-@client.event
-async def on_message(message):
-    if message.author == client.user:
-        return
-    await client.process_commands(message)
-
-client.run(DISCORD_TOKEN)
+if __name__ == "__main__":
+    main()

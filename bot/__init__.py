@@ -1,0 +1,1 @@
+"""Tars Discord bot package."""
