@@ -10,7 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from bot.config import settings
-from bot.database.models.core_models import UserLevelModel
+from bot.database.models.core_models import LevelingConfigModel, UserLevelModel
+from bot.services.core_config_service import CoreConfigService, core_config_service
 
 LEVELING_SCHEMA = (
     """
@@ -41,10 +42,19 @@ LEVEL_XP_FACTOR = 100
 class LevelingService:
     """Manage XP gain, level calculation and leaderboard queries."""
 
-    def __init__(self, database_path: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        database_path: str | Path | None = None,
+        config_service: CoreConfigService | None = None,
+    ) -> None:
         """Initialize the service."""
 
         self.database_path = Path(database_path or settings.database_path)
+        self.config_service = config_service or (
+            CoreConfigService(self.database_path)
+            if database_path is not None
+            else core_config_service
+        )
         self._init_lock: asyncio.Lock | None = None
         self._initialized = False
 
@@ -84,16 +94,24 @@ class LevelingService:
         )
         if row is not None and row["last_message_xp_at"]:
             last_message = datetime.fromisoformat(str(row["last_message_xp_at"]))
-            if (now - last_message).total_seconds() < MESSAGE_XP_COOLDOWN_SECONDS:
+            config = await self._get_leveling_config(guild_id)
+            if not config.enabled:
                 return _row_to_user_level(row)
+            if (now - last_message).total_seconds() < config.message_cooldown_seconds:
+                return _row_to_user_level(row)
+        else:
+            config = await self._get_leveling_config(guild_id)
+            if not config.enabled:
+                return None
 
         return await self._add_xp(
             guild_id=guild_id,
             user_id=user_id,
-            xp_delta=MESSAGE_XP,
+            xp_delta=config.message_xp,
             message_delta=1,
             voice_seconds_delta=0,
             last_message_xp_at=now,
+            config=config,
         )
 
     async def add_voice_xp(
@@ -108,7 +126,11 @@ class LevelingService:
         if voice_seconds < 60:
             return await self.get_user_level(guild_id=guild_id, user_id=user_id)
 
-        xp_delta = max(0, voice_seconds // 60) * VOICE_XP_PER_MINUTE
+        config = await self._get_leveling_config(guild_id)
+        if not config.enabled:
+            return await self.get_user_level(guild_id=guild_id, user_id=user_id)
+
+        xp_delta = max(0, voice_seconds // 60) * config.voice_xp_per_minute
         return await self._add_xp(
             guild_id=guild_id,
             user_id=user_id,
@@ -116,6 +138,7 @@ class LevelingService:
             message_delta=0,
             voice_seconds_delta=voice_seconds,
             last_message_xp_at=None,
+            config=config,
         )
 
     async def get_user_level(self, *, guild_id: int, user_id: int) -> UserLevelModel:
@@ -178,6 +201,7 @@ class LevelingService:
         message_delta: int,
         voice_seconds_delta: int,
         last_message_xp_at: datetime | None,
+        config: LevelingConfigModel,
     ) -> UserLevelModel:
         await self.initialize()
         now = datetime.now(tz=timezone.utc)  # noqa: UP017
@@ -210,7 +234,7 @@ class LevelingService:
                 guild_id,
                 user_id,
                 xp_delta,
-                calculate_level(xp_delta),
+                calculate_level_with_factor(xp_delta, config.level_xp_factor),
                 message_delta,
                 voice_seconds_delta,
                 last_message_xp_at.isoformat() if last_message_xp_at else None,
@@ -220,10 +244,15 @@ class LevelingService:
                     user_id=user_id,
                     xp_delta=xp_delta,
                     database_path=self.database_path,
+                    level_xp_factor=config.level_xp_factor,
                 ),
             ),
         )
         return await self.get_user_level(guild_id=guild_id, user_id=user_id)
+
+    async def _get_leveling_config(self, guild_id: int) -> LevelingConfigModel:
+        config = await self.config_service.get_config(guild_id)
+        return config.leveling
 
     def _initialize_sync(self) -> None:
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
@@ -262,12 +291,19 @@ def calculate_level(xp: int) -> int:
     return max(0, xp // LEVEL_XP_FACTOR)
 
 
+def calculate_level_with_factor(xp: int, level_xp_factor: int) -> int:
+    """Return the display level for an XP value and configured factor."""
+
+    return max(0, xp // max(1, level_xp_factor))
+
+
 def calculate_level_for_existing_xp(
     *,
     guild_id: int,
     user_id: int,
     xp_delta: int,
     database_path: Path,
+    level_xp_factor: int = LEVEL_XP_FACTOR,
 ) -> int:
     """Calculate the post-update level for an UPSERT statement."""
 
@@ -281,7 +317,7 @@ def calculate_level_for_existing_xp(
             (guild_id, user_id),
         ).fetchone()
     current_xp = int(row[0]) if row else 0
-    return calculate_level(current_xp + xp_delta)
+    return calculate_level_with_factor(current_xp + xp_delta, level_xp_factor)
 
 
 def _row_to_user_level(row: sqlite3.Row) -> UserLevelModel:

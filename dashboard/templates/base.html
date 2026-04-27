@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}TARS Dashboard{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  </head>
+  <body class="min-h-screen bg-zinc-950 text-zinc-100">
+    <div class="fixed inset-x-0 top-0 border-b border-cyan-400/10 bg-zinc-950/90 backdrop-blur">
+      <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
+        <a href="{{ url_for('config.dashboard') }}" class="text-sm font-semibold tracking-wide text-cyan-200">TARS Dashboard</a>
+        {% if session.get("discord_user_id") %}
+          <form method="post" action="{{ url_for('auth.logout') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:border-cyan-300 hover:text-cyan-100" type="submit">
+              Sair
+            </button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+
+    <main class="mx-auto max-w-7xl px-4 pb-12 pt-20">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="mb-5 space-y-2">
+            {% for category, message in messages %}
+              <div class="rounded border px-4 py-3 text-sm {% if category == 'error' %}border-red-500/40 bg-red-950/50 text-red-100{% else %}border-emerald-400/30 bg-emerald-950/40 text-emerald-100{% endif %}">
+                {{ message }}
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>

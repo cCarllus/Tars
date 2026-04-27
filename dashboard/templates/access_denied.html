@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block title %}Acesso negado | TARS Dashboard{% endblock %}
+
+{% block content %}
+  <section class="grid min-h-[70vh] place-items-center">
+    <div class="w-full max-w-md rounded border border-red-500/30 bg-zinc-900 p-6 text-center shadow-2xl shadow-red-950/30">
+      <h1 class="text-2xl font-semibold text-red-100">Acesso negado</h1>
+      <p class="mt-2 text-sm text-zinc-400">Apenas o dono configurado pode acessar esta Dashboard.</p>
+      <a class="mt-6 inline-flex rounded bg-cyan-300 px-4 py-2 font-semibold text-zinc-950 hover:bg-cyan-200" href="{{ url_for('auth.login') }}">Voltar</a>
+    </div>
+  </section>
+{% endblock %}

@@ -9,3 +9,4 @@ htmlcov/
 myenv/
 .DS_Store
 *.sqlite3
+dashboard/*.log

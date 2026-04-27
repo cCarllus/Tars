@@ -1,0 +1,14 @@
+<div class="space-y-4">
+  {% for preview in previews %}
+    <article class="rounded border border-zinc-700 bg-zinc-950 p-4">
+      <div class="mb-3 flex items-center gap-3">
+        <span class="h-4 w-4 rounded-sm" style="background-color: {{ preview.color }}"></span>
+        <h3 class="text-sm font-semibold text-zinc-100">{{ preview.title }}</h3>
+        {% if not preview.enabled %}
+          <span class="rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">inativo</span>
+        {% endif %}
+      </div>
+      <p class="whitespace-pre-wrap text-sm leading-6 text-zinc-300">{{ preview.description }}</p>
+    </article>
+  {% endfor %}
+</div>

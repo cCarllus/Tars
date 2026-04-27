@@ -24,6 +24,12 @@ Preencha o `.env` e rode:
 python -m bot.main
 ```
 
+Para rodar a Dashboard Flask:
+
+```bash
+python -m dashboard.app
+```
+
 No macOS, os comandos de voz precisam de:
 
 ```bash
@@ -47,5 +53,5 @@ ruff check . --fix
 black .
 mypy .
 pytest
-python -m compileall main.py bot tests
+python -m compileall main.py bot dashboard tests
 ```

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Login | TARS Dashboard{% endblock %}
+
+{% block content %}
+  <section class="grid min-h-[70vh] place-items-center">
+    <div class="w-full max-w-md rounded border border-cyan-400/20 bg-zinc-900 p-6 shadow-2xl shadow-cyan-950/30">
+      <h1 class="text-2xl font-semibold text-zinc-50">Acesso privado</h1>
+      <p class="mt-2 text-sm text-zinc-400">Restrito ao dono configurado do TARS.</p>
+
+      <form class="mt-6" method="post" action="{{ url_for('auth.start_login') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="w-full rounded bg-cyan-300 px-4 py-2.5 font-semibold text-zinc-950 hover:bg-cyan-200 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400" type="submit" {% if not oauth_ready %}disabled{% endif %}>
+          Entrar com Discord
+        </button>
+      </form>
+
+      {% if not oauth_ready %}
+        <p class="mt-4 text-sm text-amber-200">Configure TARS_OWNER_USER_ID, DISCORD_OAUTH_CLIENT_ID, DISCORD_OAUTH_CLIENT_SECRET e DASHBOARD_SECRET_KEY.</p>
+      {% endif %}
+    </div>
+  </section>
+{% endblock %}

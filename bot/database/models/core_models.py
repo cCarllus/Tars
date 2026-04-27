@@ -141,6 +141,43 @@ class AutoModConfigModel:
 
 
 @dataclass(frozen=True)
+class LevelingConfigModel:
+    """Configurable XP behavior for the public leveling feature."""
+
+    enabled: bool = True
+    message_xp: int = 15
+    message_cooldown_seconds: int = 60
+    voice_xp_per_minute: int = 5
+    level_xp_factor: int = 100
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the config for JSON persistence."""
+
+        return {
+            "enabled": self.enabled,
+            "message_xp": self.message_xp,
+            "message_cooldown_seconds": self.message_cooldown_seconds,
+            "voice_xp_per_minute": self.voice_xp_per_minute,
+            "level_xp_factor": self.level_xp_factor,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> Self:
+        """Deserialize the config from Dashboard JSON."""
+
+        return cls(
+            enabled=bool(payload.get("enabled", True)),
+            message_xp=max(0, int(payload.get("message_xp", 15))),
+            message_cooldown_seconds=max(
+                0,
+                int(payload.get("message_cooldown_seconds", 60)),
+            ),
+            voice_xp_per_minute=max(0, int(payload.get("voice_xp_per_minute", 5))),
+            level_xp_factor=max(1, int(payload.get("level_xp_factor", 100))),
+        )
+
+
+@dataclass(frozen=True)
 class DashboardConfigModel:
     """Full guild configuration controlled by the Dashboard."""
 
@@ -156,6 +193,7 @@ class DashboardConfigModel:
     logs: LogConfigModel = field(default_factory=LogConfigModel)
     auto_role: AutoRoleConfigModel = field(default_factory=AutoRoleConfigModel)
     auto_mod: AutoModConfigModel = field(default_factory=AutoModConfigModel)
+    leveling: LevelingConfigModel = field(default_factory=LevelingConfigModel)
     updated_at: datetime = field(
         default_factory=lambda: datetime.now(tz=timezone.utc),  # noqa: UP017
     )
@@ -171,6 +209,7 @@ class DashboardConfigModel:
             "logs": self.logs.to_dict(),
             "auto_role": self.auto_role.to_dict(),
             "auto_mod": self.auto_mod.to_dict(),
+            "leveling": self.leveling.to_dict(),
             "updated_at": self.updated_at.isoformat(),
         }
 
@@ -192,6 +231,7 @@ class DashboardConfigModel:
             logs=LogConfigModel.from_dict(payload.get("logs", {})),
             auto_role=AutoRoleConfigModel.from_dict(payload.get("auto_role", {})),
             auto_mod=AutoModConfigModel.from_dict(payload.get("auto_mod", {})),
+            leveling=LevelingConfigModel.from_dict(payload.get("leveling", {})),
             updated_at=_parse_optional_datetime(payload.get("updated_at")),
         )
 

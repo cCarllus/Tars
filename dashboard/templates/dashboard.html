@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}Configurações | TARS Dashboard{% endblock %}
+
+{% block content %}
+  <div class="mb-6 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+    <div>
+      <h1 class="text-3xl font-semibold text-zinc-50">Configurações</h1>
+      <p class="mt-1 text-sm text-zinc-400">Banco: SQLite compartilhado com o bot</p>
+    </div>
+    <div class="text-sm text-zinc-400">
+      Atualizado em {{ config.updated_at.strftime("%d/%m/%Y %H:%M") }}
+    </div>
+  </div>
+
+  <form
+    method="post"
+    action="{{ url_for('config.save_dashboard') }}"
+    class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]"
+  >
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="space-y-6">
+      <section class="rounded border border-zinc-800 bg-zinc-900 p-5">
+        <h2 class="text-lg font-semibold text-cyan-100">Servidor</h2>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          <label class="block">
+            <span class="text-sm text-zinc-300">ID do servidor</span>
+            <input class="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:border-cyan-300" name="guild_id" value="{{ config.guild_id or tars_guild_id }}" inputmode="numeric" required>
+          </label>
+          <label class="block">
+            <span class="text-sm text-zinc-300">ID do dono</span>
+            <input class="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:border-cyan-300" name="owner_user_id" value="{{ config.owner_user_id or owner_user_id }}" inputmode="numeric" required>
+          </label>
+        </div>
+      </section>
+
+      <section class="rounded border border-zinc-800 bg-zinc-900 p-5">
+        <h2 class="text-lg font-semibold text-cyan-100">Welcome</h2>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          {{ toggle("welcome_enabled", "Ativo", config.welcome.enabled) }}
+          {{ input("welcome_channel_id", "Canal", config.welcome.channel_id) }}
+          {{ color("welcome_embed_color", "Cor", "#%06x"|format(config.welcome.embed_color)) }}
+        </div>
+        {{ textarea("welcome_message_template", "Mensagem", config.welcome.message_template) }}
+      </section>
+
+      <section class="rounded border border-zinc-800 bg-zinc-900 p-5">
+        <h2 class="text-lg font-semibold text-cyan-100">Leave</h2>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          {{ toggle("leave_enabled", "Ativo", config.leave.enabled) }}
+          {{ input("leave_channel_id", "Canal", config.leave.channel_id) }}
+          {{ color("leave_embed_color", "Cor", "#%06x"|format(config.leave.embed_color)) }}
+        </div>
+        {{ textarea("leave_message_template", "Mensagem", config.leave.message_template) }}
+      </section>
+
+      <section class="rounded border border-zinc-800 bg-zinc-900 p-5">
+        <h2 class="text-lg font-semibold text-cyan-100">Canais e cargos</h2>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          {{ input("logs_channel_id", "Canal de logs", config.logs.channel_id) }}
+          <label class="block">
+            <span class="text-sm text-zinc-300">Nível de logs</span>
+            <select class="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:border-cyan-300" name="logs_detail_level">
+              <option value="1" {% if config.logs.detail_level == 1 %}selected{% endif %}>Básico</option>
+              <option value="2" {% if config.logs.detail_level == 2 %}selected{% endif %}>Normal</option>
+              <option value="3" {% if config.logs.detail_level == 3 %}selected{% endif %}>Detalhado</option>
+            </select>
+          </label>
+          {{ toggle("auto_role_enabled", "Cargo automático", config.auto_role.enabled) }}
+          {{ input("auto_role_id", "Cargo automático", config.auto_role.role_id) }}
+        </div>
+      </section>
+
+      <section class="rounded border border-zinc-800 bg-zinc-900 p-5">
+        <h2 class="text-lg font-semibold text-cyan-100">Auto-moderação</h2>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          {{ toggle("auto_mod_enabled", "Ativo", config.auto_mod.enabled) }}
+          {{ toggle("auto_mod_block_links", "Bloquear links", config.auto_mod.block_links) }}
+          {{ toggle("auto_mod_dm_owner_on_action", "Alertar dono", config.auto_mod.dm_owner_on_action) }}
+        </div>
+        {{ textarea("auto_mod_blocked_words", "Palavras bloqueadas", config.auto_mod.blocked_words|join("\n")) }}
+        {{ textarea("auto_mod_allowed_links", "Domínios permitidos", config.auto_mod.allowed_links|join("\n")) }}
+      </section>
+
+      <section class="rounded border border-zinc-800 bg-zinc-900 p-5">
+        <h2 class="text-lg font-semibold text-cyan-100">XP</h2>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          {{ toggle("leveling_enabled", "Ativo", config.leveling.enabled) }}
+          {{ number("leveling_message_xp", "XP por mensagem", config.leveling.message_xp) }}
+          {{ number("leveling_message_cooldown_seconds", "Cooldown", config.leveling.message_cooldown_seconds) }}
+          {{ number("leveling_voice_xp_per_minute", "XP por minuto em voz", config.leveling.voice_xp_per_minute) }}
+          {{ number("leveling_level_xp_factor", "XP por nível", config.leveling.level_xp_factor) }}
+        </div>
+      </section>
+    </div>
+
+    <aside class="space-y-6 lg:sticky lg:top-20 lg:self-start">
+      <section class="rounded border border-cyan-400/20 bg-zinc-900 p-5">
+        <div class="mb-4 flex items-center justify-between">
+          <h2 class="text-lg font-semibold text-cyan-100">Preview</h2>
+          <button
+            class="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:border-cyan-300"
+            type="button"
+            hx-post="{{ url_for('config.preview_dashboard') }}"
+            hx-include="closest form"
+            hx-target="#embed-preview"
+            hx-swap="innerHTML"
+          >
+            Atualizar
+          </button>
+        </div>
+        <div id="embed-preview">
+          {% include "partials/embed_preview.html" %}
+        </div>
+      </section>
+
+      <section class="rounded border border-zinc-800 bg-zinc-900 p-5">
+        <h2 class="text-lg font-semibold text-cyan-100">Auditoria</h2>
+        <div class="mt-4 space-y-3">
+          {% for event in audit_events %}
+            <div class="rounded border border-zinc-800 bg-zinc-950 p-3 text-sm">
+              <div class="font-medium text-zinc-200">{{ event.event_type }}</div>
+              <div class="mt-1 text-xs text-zinc-500">{{ event.created_at }}</div>
+            </div>
+          {% else %}
+            <p class="text-sm text-zinc-500">Sem eventos registrados.</p>
+          {% endfor %}
+        </div>
+      </section>
+
+      <button class="w-full rounded bg-cyan-300 px-4 py-3 font-semibold text-zinc-950 hover:bg-cyan-200" type="submit">
+        Salvar
+      </button>
+    </aside>
+  </form>
+{% endblock %}
+
+{% macro input(name, label, value) -%}
+  <label class="block">
+    <span class="text-sm text-zinc-300">{{ label }}</span>
+    <input class="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:border-cyan-300" name="{{ name }}" value="{{ value or '' }}" inputmode="numeric">
+  </label>
+{%- endmacro %}
+
+{% macro number(name, label, value) -%}
+  <label class="block">
+    <span class="text-sm text-zinc-300">{{ label }}</span>
+    <input class="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:border-cyan-300" name="{{ name }}" value="{{ value }}" type="number" min="0">
+  </label>
+{%- endmacro %}
+
+{% macro color(name, label, value) -%}
+  <label class="block">
+    <span class="text-sm text-zinc-300">{{ label }}</span>
+    <input class="mt-1 h-10 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 outline-none focus:border-cyan-300" name="{{ name }}" value="{{ value }}" type="color">
+  </label>
+{%- endmacro %}
+
+{% macro textarea(name, label, value) -%}
+  <label class="mt-4 block">
+    <span class="text-sm text-zinc-300">{{ label }}</span>
+    <textarea class="mt-1 min-h-24 w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:border-cyan-300" name="{{ name }}">{{ value }}</textarea>
+  </label>
+{%- endmacro %}
+
+{% macro toggle(name, label, checked) -%}
+  <label class="flex min-h-10 items-center justify-between gap-3 rounded border border-zinc-800 bg-zinc-950 px-3 py-2">
+    <span class="text-sm text-zinc-300">{{ label }}</span>
+    <input class="h-5 w-5 accent-cyan-300" name="{{ name }}" type="checkbox" value="1" {% if checked %}checked{% endif %}>
+  </label>
+{%- endmacro %}
