@@ -190,6 +190,50 @@ async def safe_send_dm(
     )
 
 
+async def safe_add_role(
+    member: discord.Member,
+    role: discord.Role,
+    *,
+    reason: str,
+) -> None:
+    """Assign a role with retry, timeout and latency logging."""
+
+    await _run_discord_operation(
+        action="add_role",
+        operation=lambda: member.add_roles(role, reason=reason),
+        guild_id=member.guild.id,
+        user_id=member.id,
+    )
+
+
+async def safe_delete_message(
+    message: discord.Message,
+    *,
+    reason: str,
+) -> bool:
+    """Delete a message with retry, timeout and latency logging."""
+
+    async def operation() -> bool:
+        try:
+            await message.delete()
+        except discord.NotFound as exc:
+            if _is_unknown_message(exc):
+                logger.info(
+                    "Discord message %s already deleted; treating delete as success",
+                    message.id,
+                )
+                return False
+            raise
+        return True
+
+    return await _run_discord_operation(
+        action=reason,
+        operation=operation,
+        guild_id=message.guild.id if message.guild else None,
+        user_id=message.author.id if message.author else None,
+    )
+
+
 async def _run_discord_operation(
     *,
     action: str,
@@ -251,6 +295,10 @@ def _can_retry(exc: Exception) -> bool:
 
 def _is_unknown_channel(exc: discord.NotFound) -> bool:
     return getattr(exc, "code", None) == 10003
+
+
+def _is_unknown_message(exc: discord.NotFound) -> bool:
+    return getattr(exc, "code", None) == 10008
 
 
 async def _sleep_before_retry(

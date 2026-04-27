@@ -16,6 +16,7 @@ class Settings(BaseSettings):
         command_prefix: Prefix used for text commands.
         log_level: Root log level.
         database_path: SQLite database path.
+        tars_owner_user_id: Discord user ID allowed to manage the dashboard.
         global_command_channel_id: Channel where generation commands are allowed.
         private_voice_hub_id: Voice channel that creates private calls.
         promo_channel_id: Text channel where game promotions are allowed.
@@ -36,6 +37,7 @@ class Settings(BaseSettings):
         default="bot/database/tars.sqlite3",
         alias="DATABASE_PATH",
     )
+    tars_owner_user_id: int = Field(default=0, alias="TARS_OWNER_USER_ID")
     global_command_channel_id: int = Field(
         default=1498085284410298590,
         alias="GLOBAL_COMMAND_CHANNEL_ID",

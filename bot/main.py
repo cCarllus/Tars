@@ -13,6 +13,8 @@ COGS_PACKAGE = "bot.cogs"
 COGS_PATH = Path(__file__).parent / "cogs"
 INVITE_PERMISSIONS = discord.Permissions(
     connect=True,
+    manage_messages=True,
+    manage_roles=True,
     manage_channels=True,
     move_members=True,
     view_channel=True,
@@ -116,6 +118,7 @@ def create_bot() -> TarsBot:
     """Create and configure the Discord bot instance."""
 
     intents = discord.Intents.default()
+    intents.members = True
     intents.message_content = True
     intents.voice_states = True
 
