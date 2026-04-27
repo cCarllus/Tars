@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Mapping
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -161,9 +162,13 @@ def test_game_deals_service_reports_missing_itad_key() -> None:
 def test_game_deals_cache_prevents_duplicates_and_limits_daily_posts(
     tmp_path: Path,
 ) -> None:
-    """Ensure automatic posts do not duplicate deals or exceed the daily limit."""
+    """Ensure automatic posts do not duplicate deals or exceed day cadence."""
 
-    cache = GameDealsCache(tmp_path / "games_promo_cache.json")
+    current_time = datetime(2026, 4, 1, tzinfo=UTC)
+    cache = GameDealsCache(
+        tmp_path / "games_promo_cache.json",
+        clock=lambda: current_time,
+    )
     deal = _deal("Cache Test")
 
     assert asyncio.run(cache.filter_unposted([deal])) == [deal]
@@ -172,10 +177,18 @@ def test_game_deals_cache_prevents_duplicates_and_limits_daily_posts(
     asyncio.run(cache.mark_posted([deal]))
 
     assert asyncio.run(cache.filter_unposted([deal])) == []
+    assert asyncio.run(cache.can_post_today()) is False
 
-    for index in range(3):
-        asyncio.run(cache.mark_posted([_deal(f"Cache Test {index}")]))
+    current_time += timedelta(days=1)
+    assert asyncio.run(cache.can_post_today()) is False
 
+    current_time += timedelta(days=1)
+    assert asyncio.run(cache.can_post_today()) is False
+
+    current_time += timedelta(days=1)
+    assert asyncio.run(cache.can_post_today()) is True
+
+    asyncio.run(cache.mark_posted([_deal("Cache Test 2")]))
     assert asyncio.run(cache.can_post_today()) is False
 
 

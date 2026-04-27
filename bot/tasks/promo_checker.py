@@ -59,8 +59,8 @@ class PromoChecker:
 
         if not await self._cache.can_post_today():
             logger.info(
-                "Skipping game promo automatic post: daily limit reached",
-                extra={"action": "games_promo_auto", "reason": "daily_limit"},
+                "Skipping game promo automatic post: day cadence blocked",
+                extra={"action": "games_promo_auto", "reason": "day_cadence"},
             )
             return False
 
