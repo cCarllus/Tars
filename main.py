@@ -3,6 +3,16 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 
+# Load Opus for voice support on macOS if available.
+if not discord.opus.is_loaded():
+    for path in ("/opt/homebrew/lib/libopus.dylib", "/usr/local/lib/libopus.dylib"):
+        if os.path.exists(path):
+            try:
+                discord.opus.load_opus(path)
+            except Exception:
+                pass
+            break
+
 load_dotenv()
 
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
