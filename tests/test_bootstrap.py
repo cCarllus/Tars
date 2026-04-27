@@ -1,5 +1,7 @@
 """Smoke tests for project bootstrap behavior."""
 
+import asyncio
+from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
 
@@ -87,3 +89,58 @@ def test_private_voice_manager_validates_user_limit(monkeypatch: MonkeyPatch) ->
     assert manager.validate_user_limit("99") == 99
     with pytest.raises(ValueError, match="entre 0 e 99"):
         manager.validate_user_limit("100")
+
+
+def test_rate_limiter_rejects_excessive_action(monkeypatch: MonkeyPatch) -> None:
+    """Ensure action buckets reject requests after the configured limit."""
+
+    monkeypatch.setenv("DISCORD_TOKEN", "test-token")
+
+    from bot.utils.rate_limiter import RateLimiter, RateLimitRule
+
+    limiter = RateLimiter(
+        action_rules={
+            "test_action": {
+                "global": RateLimitRule(limit=1, window_seconds=60),
+            },
+        },
+    )
+
+    first_result = asyncio.run(limiter.check(action="test_action"))
+    second_result = asyncio.run(limiter.check(action="test_action"))
+
+    assert first_result.allowed is True
+    assert second_result.allowed is False
+    assert second_result.scope == "global:0"
+
+
+def test_sqlite_database_persists_voice_sessions(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Ensure active voice sessions are persisted and removable."""
+
+    monkeypatch.setenv("DISCORD_TOKEN", "test-token")
+
+    from bot.utils.database import SQLiteDatabase
+
+    database_path = tmp_path / "tars.sqlite3"
+    db = SQLiteDatabase(database_path)
+
+    asyncio.run(
+        db.upsert_voice_session(
+            guild_id=123,
+            owner_id=456,
+            channel_id=789,
+        ),
+    )
+    sessions = asyncio.run(db.list_voice_sessions())
+
+    assert len(sessions) == 1
+    assert sessions[0].guild_id == 123
+    assert sessions[0].owner_id == 456
+    assert sessions[0].channel_id == 789
+
+    asyncio.run(db.delete_voice_session_by_channel(789))
+
+    assert asyncio.run(db.list_voice_sessions()) == []

@@ -9,6 +9,9 @@ from bot.logger import logger
 from bot.utils.private_voice_embeds import build_private_voice_control_embed
 from bot.utils.private_voice_manager import PrivateVoiceManager
 from bot.utils.private_voice_view import PrivateVoiceControlView
+from bot.utils.queue_manager import discord_api_queue
+from bot.utils.rate_limiter import RateLimitExceeded
+from bot.utils.safe_discord import safe_send_message
 
 
 class PrivateVoiceCalls(commands.Cog):
@@ -19,6 +22,28 @@ class PrivateVoiceCalls(commands.Cog):
 
         self.bot = bot
         self.manager = PrivateVoiceManager()
+        self._sessions_reconciled = False
+
+    async def cog_load(self) -> None:
+        """Initialize dependencies used by the cog."""
+
+        await self.manager.initialize()
+        await discord_api_queue.start()
+
+    async def cog_unload(self) -> None:
+        """Stop background queue workers when the cog unloads."""
+
+        await discord_api_queue.stop()
+
+    @commands.Cog.listener()
+    async def on_ready(self) -> None:
+        """Recover or remove persisted private voice sessions on startup."""
+
+        if self._sessions_reconciled:
+            return
+
+        await self.manager.reconcile_voice_sessions(self.bot.guilds)
+        self._sessions_reconciled = True
 
     @commands.Cog.listener()
     async def on_voice_state_update(
@@ -62,6 +87,12 @@ class PrivateVoiceCalls(commands.Cog):
                 "Missing permissions while creating private voice call for %s",
                 member.id,
             )
+        except RateLimitExceeded:
+            logger.warning(
+                "Rate limited private voice call creation for member %s in guild %s",
+                member.id,
+                member.guild.id,
+            )
         except discord.HTTPException:
             logger.exception("Discord API error while creating private voice call")
 
@@ -94,10 +125,15 @@ class PrivateVoiceCalls(commands.Cog):
             channel=channel,
             owner=owner,
         )
-        await channel.send(
-            content=f"{owner.mention}, sua call privada foi criada.",
-            embed=embed,
-            view=view,
+        await discord_api_queue.submit(
+            action="send_private_voice_control_message",
+            operation=lambda: safe_send_message(
+                channel,
+                content=f"{owner.mention}, sua call privada foi criada.",
+                embed=embed,
+                view=view,
+                reason="send_private_voice_control_message",
+            ),
         )
 
 

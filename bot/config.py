@@ -15,6 +15,7 @@ class Settings(BaseSettings):
         discord_token: Token used to authenticate with Discord.
         command_prefix: Prefix used for text commands.
         log_level: Root log level.
+        database_path: SQLite database path.
         global_command_channel_id: Channel where generation commands are allowed.
         private_voice_hub_id: Voice channel that creates private calls.
     """
@@ -28,6 +29,10 @@ class Settings(BaseSettings):
     discord_token: str = Field(alias="DISCORD_TOKEN")
     command_prefix: str = Field(default="/", alias="COMMAND_PREFIX")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
+    database_path: str = Field(
+        default="bot/database/tars.sqlite3",
+        alias="DATABASE_PATH",
+    )
     global_command_channel_id: int = Field(
         default=1498085284410298590,
         alias="GLOBAL_COMMAND_CHANNEL_ID",

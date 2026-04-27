@@ -2,13 +2,31 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 import discord
 
 from bot.config import settings
 from bot.logger import logger
+from bot.models.voice import VoiceSession
+from bot.utils.database import SQLiteDatabase, database
+from bot.utils.locks import LockRegistry, lock_registry
 from bot.utils.private_voice_embeds import build_private_voice_invite_embed
+from bot.utils.queue_manager import discord_api_queue
+from bot.utils.rate_limiter import (
+    VOICE_CREATION_ACTION,
+    RateLimitExceeded,
+    rate_limiter,
+)
+from bot.utils.safe_discord import (
+    safe_create_voice_channel,
+    safe_delete_channel,
+    safe_edit_channel_permissions,
+    safe_edit_voice_channel,
+    safe_move_member,
+    safe_send_dm,
+)
 
 PRIVATE_CALL_TOPIC_PREFIX = "private_voice_call:owner_id="
 PRIVATE_CALL_NAME_TEMPLATE = "Call Privada - {display_name}"
@@ -20,6 +38,7 @@ MAX_VOICE_USER_LIMIT = 99
 class PrivateVoiceCallState:
     """Runtime state for a temporary private voice call."""
 
+    guild_id: int
     owner_id: int
     channel_id: int
     is_private: bool = True
@@ -30,16 +49,58 @@ class PrivateVoiceCallState:
 class PrivateVoiceManager:
     """Manage private voice channel lifecycle and permissions."""
 
-    def __init__(self, hub_channel_id: int | None = None) -> None:
+    def __init__(
+        self,
+        hub_channel_id: int | None = None,
+        *,
+        db: SQLiteDatabase | None = None,
+        locks: LockRegistry | None = None,
+    ) -> None:
         """Initialize the manager.
 
         Args:
             hub_channel_id: Optional override for the private voice hub channel.
+            db: Optional database override for tests.
+            locks: Optional lock registry override for tests.
         """
 
         self.hub_channel_id = hub_channel_id or settings.private_voice_hub_id
+        self.database = db or database
+        self.locks = locks or lock_registry
         self._calls_by_owner: dict[int, PrivateVoiceCallState] = {}
         self._owner_by_channel: dict[int, int] = {}
+
+    async def initialize(self) -> None:
+        """Initialize persistent storage for private voice calls."""
+
+        await self.database.initialize()
+
+    async def reconcile_voice_sessions(
+        self,
+        guilds: Iterable[discord.Guild],
+    ) -> None:
+        """Load persisted voice sessions and remove orphan database records."""
+
+        sessions = await self.database.list_voice_sessions()
+        guild_by_id = {guild.id: guild for guild in guilds}
+
+        for session in sessions:
+            guild = guild_by_id.get(session.guild_id)
+            channel = (
+                guild.get_channel(session.channel_id) if guild is not None else None
+            )
+
+            if isinstance(channel, discord.VoiceChannel):
+                self._register_persisted_call(session)
+                logger.info(
+                    "Recovered private voice call %s for owner %s",
+                    session.channel_id,
+                    session.owner_id,
+                )
+                continue
+
+            await self.database.delete_voice_session_by_channel(session.channel_id)
+            logger.info("Removed orphan private voice session %s", session.channel_id)
 
     def is_hub_channel(self, channel: discord.abc.GuildChannel | None) -> bool:
         """Return whether a channel is the configured private voice hub."""
@@ -90,21 +151,63 @@ class PrivateVoiceManager:
             A tuple with the voice channel and whether it was newly created.
         """
 
-        active_channel = self._get_active_channel_for_owner(member)
-        if active_channel is not None:
-            return active_channel, False
+        async with self.locks.user(member.id):
+            active_channel = self._get_active_channel_for_owner(member)
+            if active_channel is not None:
+                return active_channel, False
 
-        channel = await self._create_private_call(
-            member=member,
-            hub_channel=hub_channel,
-        )
-        self._register_call(owner_id=member.id, channel_id=channel.id)
-        logger.info(
-            "Created private voice call %s for owner %s",
-            channel.id,
-            member.id,
-        )
-        return channel, True
+            result = await rate_limiter.check(
+                action=VOICE_CREATION_ACTION,
+                user_id=member.id,
+                guild_id=member.guild.id,
+            )
+            if not result.allowed:
+                await self.database.log_rate_limit_hit(
+                    action=result.action,
+                    scope=result.scope,
+                    retry_after=result.retry_after,
+                    guild_id=member.guild.id,
+                    user_id=member.id,
+                )
+                raise RateLimitExceeded(result)
+
+            try:
+                channel = await self._create_private_call(
+                    member=member,
+                    hub_channel=hub_channel,
+                )
+                self._register_call(
+                    guild_id=member.guild.id,
+                    owner_id=member.id,
+                    channel_id=channel.id,
+                )
+                await self.database.upsert_voice_session(
+                    guild_id=member.guild.id,
+                    owner_id=member.id,
+                    channel_id=channel.id,
+                )
+                await self.database.log_action(
+                    action="create_private_voice_call",
+                    success=True,
+                    guild_id=member.guild.id,
+                    user_id=member.id,
+                )
+            except Exception as exc:
+                await self.database.log_action(
+                    action="create_private_voice_call",
+                    success=False,
+                    guild_id=member.guild.id,
+                    user_id=member.id,
+                    error=type(exc).__name__,
+                )
+                raise
+
+            logger.info(
+                "Created private voice call %s for owner %s",
+                channel.id,
+                member.id,
+            )
+            return channel, True
 
     async def move_member_to_call(
         self,
@@ -114,7 +217,14 @@ class PrivateVoiceManager:
     ) -> None:
         """Move a member to a private voice call."""
 
-        await member.move_to(channel, reason="Movendo para call privada temporária")
+        await discord_api_queue.submit(
+            action="move_private_voice_member",
+            operation=lambda: safe_move_member(
+                member,
+                channel,
+                reason="Movendo para call privada temporária",
+            ),
+        )
 
     async def delete_if_empty(self, channel: discord.VoiceChannel) -> bool:
         """Delete a managed private call if it has no connected members."""
@@ -133,11 +243,19 @@ class PrivateVoiceManager:
     ) -> None:
         """Delete a private call and remove it from runtime state."""
 
-        owner_id = self._owner_by_channel.pop(channel.id, None)
-        if owner_id is not None:
-            self._calls_by_owner.pop(owner_id, None)
-
-        await channel.delete(reason=reason)
+        owner_id = self._owner_by_channel.get(channel.id)
+        await discord_api_queue.submit(
+            action="delete_private_voice_call",
+            operation=lambda: safe_delete_channel(channel, reason=reason),
+        )
+        self._unregister_call(channel.id)
+        await self.database.delete_voice_session_by_channel(channel.id)
+        await self.database.log_action(
+            action="delete_private_voice_call",
+            success=True,
+            guild_id=channel.guild.id,
+            user_id=owner_id,
+        )
         logger.info("Deleted private voice call %s: %s", channel.id, reason)
 
     async def set_user_limit(
@@ -148,9 +266,13 @@ class PrivateVoiceManager:
     ) -> None:
         """Set the private call user limit."""
 
-        await channel.edit(
-            user_limit=limit,
-            reason="Atualizando limite de usuários da call privada",
+        await discord_api_queue.submit(
+            action="set_private_voice_user_limit",
+            operation=lambda: safe_edit_voice_channel(
+                channel,
+                user_limit=limit,
+                reason="Atualizando limite de usuários da call privada",
+            ),
         )
 
     async def rename_call(
@@ -161,9 +283,13 @@ class PrivateVoiceManager:
     ) -> None:
         """Rename the private voice call."""
 
-        await channel.edit(
-            name=self.sanitize_channel_name(name),
-            reason="Renomeando call privada",
+        await discord_api_queue.submit(
+            action="rename_private_voice_call",
+            operation=lambda: safe_edit_voice_channel(
+                channel,
+                name=self.sanitize_channel_name(name),
+                reason="Renomeando call privada",
+            ),
         )
 
     async def toggle_visibility(
@@ -185,10 +311,14 @@ class PrivateVoiceManager:
             connect=not state.is_private,
         )
 
-        await channel.set_permissions(
-            channel.guild.default_role,
-            overwrite=overwrite,
-            reason="Atualizando visibilidade da call privada",
+        await discord_api_queue.submit(
+            action="toggle_private_voice_visibility",
+            operation=lambda: safe_edit_channel_permissions(
+                channel,
+                channel.guild.default_role,
+                overwrite=overwrite,
+                reason="Atualizando visibilidade da call privada",
+            ),
         )
         return state.is_private
 
@@ -247,9 +377,15 @@ class PrivateVoiceManager:
         await self.grant_member_access(member=target, channel=channel)
 
         try:
-            await target.send(
-                embed=build_private_voice_invite_embed(owner=owner, channel=channel),
-                view=invite_view,
+            await discord_api_queue.submit(
+                action="send_private_voice_invite_dm",
+                operation=lambda: safe_send_dm(
+                    target,
+                    embed=build_private_voice_invite_embed(
+                        owner=owner, channel=channel
+                    ),
+                    view=invite_view,
+                ),
             )
         except discord.Forbidden:
             logger.info(
@@ -276,10 +412,14 @@ class PrivateVoiceManager:
             send_messages=True,
             read_message_history=True,
         )
-        await channel.set_permissions(
-            member,
-            overwrite=overwrite,
-            reason="Convidando membro para call privada",
+        await discord_api_queue.submit(
+            action="grant_private_voice_access",
+            operation=lambda: safe_edit_channel_permissions(
+                channel,
+                member,
+                overwrite=overwrite,
+                reason="Convidando membro para call privada",
+            ),
         )
 
     def sanitize_channel_name(self, name: str) -> str:
@@ -334,19 +474,37 @@ class PrivateVoiceManager:
         hub_channel: discord.VoiceChannel,
     ) -> discord.VoiceChannel:
         channel_name = self.build_private_call_name(member)
-        return await member.guild.create_voice_channel(
-            name=channel_name,
-            category=hub_channel.category,
-            overwrites=self._build_initial_overwrites(member),
-            reason=f"Criando call privada temporária para {member.id}",
+        return await discord_api_queue.submit(
+            action="create_private_voice_call",
+            operation=lambda: safe_create_voice_channel(
+                member.guild,
+                name=channel_name,
+                category=hub_channel.category,
+                overwrites=self._build_initial_overwrites(member),
+                reason=f"Criando call privada temporária para {member.id}",
+            ),
         )
 
-    def _register_call(self, *, owner_id: int, channel_id: int) -> None:
+    def _register_call(self, *, guild_id: int, owner_id: int, channel_id: int) -> None:
         self._calls_by_owner[owner_id] = PrivateVoiceCallState(
+            guild_id=guild_id,
             owner_id=owner_id,
             channel_id=channel_id,
         )
         self._owner_by_channel[channel_id] = owner_id
+
+    def _register_persisted_call(self, session: VoiceSession) -> None:
+        self._calls_by_owner[session.owner_id] = PrivateVoiceCallState(
+            guild_id=session.guild_id,
+            owner_id=session.owner_id,
+            channel_id=session.channel_id,
+        )
+        self._owner_by_channel[session.channel_id] = session.owner_id
+
+    def _unregister_call(self, channel_id: int) -> None:
+        owner_id = self._owner_by_channel.pop(channel_id, None)
+        if owner_id is not None:
+            self._calls_by_owner.pop(owner_id, None)
 
     def _build_initial_overwrites(
         self,
@@ -390,8 +548,12 @@ class PrivateVoiceManager:
     ) -> None:
         overwrite = channel.overwrites_for(channel.guild.default_role)
         overwrite.update(**{permission_name: None if enabled else False})
-        await channel.set_permissions(
-            channel.guild.default_role,
-            overwrite=overwrite,
-            reason=reason,
+        await discord_api_queue.submit(
+            action=f"set_private_voice_permission:{permission_name}",
+            operation=lambda: safe_edit_channel_permissions(
+                channel,
+                channel.guild.default_role,
+                overwrite=overwrite,
+                reason=reason,
+            ),
         )
