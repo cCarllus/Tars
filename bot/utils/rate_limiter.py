@@ -118,6 +118,18 @@ class RateLimiter:
 
         return RateLimitResult(allowed=True, action=action, scope="all")
 
+    async def reset(
+        self,
+        *,
+        action: str,
+        scope: str,
+        identifier: int,
+    ) -> None:
+        """Clear recorded hits for one rate-limit bucket."""
+
+        async with self._lock:
+            self._hits.pop((action, scope, identifier), None)
+
     def _build_checks(
         self,
         *,

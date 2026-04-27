@@ -579,6 +579,12 @@ class PrivateVoiceManager:
     ) -> None:
         self._unregister_call(channel.id)
         await self.database.delete_voice_session_by_channel(channel.id)
+        if owner_id is not None:
+            await rate_limiter.reset(
+                action=VOICE_CREATION_ACTION,
+                scope="user",
+                identifier=owner_id,
+            )
         await self.database.log_action(
             action="delete_private_voice_call",
             success=True,

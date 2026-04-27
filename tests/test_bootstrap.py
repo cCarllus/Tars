@@ -135,6 +135,35 @@ def test_rate_limiter_rejects_excessive_action(monkeypatch: MonkeyPatch) -> None
     assert second_result.scope == "global:0"
 
 
+def test_rate_limiter_can_reset_one_bucket(monkeypatch: MonkeyPatch) -> None:
+    """Ensure lifecycle cleanup can release a user's creation cooldown."""
+
+    monkeypatch.setenv("DISCORD_TOKEN", "test-token")
+
+    from bot.utils.rate_limiter import RateLimiter, RateLimitRule
+
+    limiter = RateLimiter(
+        action_rules={
+            "test_action": {
+                "global": RateLimitRule(limit=10, window_seconds=60),
+                "user": RateLimitRule(limit=1, window_seconds=60),
+            },
+        },
+    )
+
+    first_result = asyncio.run(limiter.check(action="test_action", user_id=123))
+    blocked_result = asyncio.run(limiter.check(action="test_action", user_id=123))
+    asyncio.run(
+        limiter.reset(action="test_action", scope="user", identifier=123),
+    )
+    released_result = asyncio.run(limiter.check(action="test_action", user_id=123))
+
+    assert first_result.allowed is True
+    assert blocked_result.allowed is False
+    assert blocked_result.scope == "user:123"
+    assert released_result.allowed is True
+
+
 def test_sqlite_database_persists_voice_sessions(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
