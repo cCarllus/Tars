@@ -30,6 +30,18 @@ Para rodar a Dashboard Flask:
 python -m dashboard.app
 ```
 
+## Docker
+
+Com o `.env` preenchido, suba o bot e a Dashboard juntos:
+
+```bash
+docker compose up --build
+```
+
+A imagem cria e usa automaticamente o ambiente virtual `myenv` dentro do
+container. A Dashboard fica disponível em `http://localhost:5000` e os dois
+serviços compartilham o banco em `bot/database/tars.sqlite3`.
+
 No macOS, os comandos de voz precisam de:
 
 ```bash
