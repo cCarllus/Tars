@@ -18,6 +18,9 @@ class Settings(BaseSettings):
         database_path: SQLite database path.
         global_command_channel_id: Channel where generation commands are allowed.
         private_voice_hub_id: Voice channel that creates private calls.
+        promo_channel_id: Text channel where game promotions are allowed.
+        itad_api_key: API key used for IsThereAnyDeal requests.
+        itad_client_id: Client ID issued by IsThereAnyDeal.
     """
 
     model_config = SettingsConfigDict(
@@ -41,6 +44,12 @@ class Settings(BaseSettings):
         default=1498213727932256308,
         alias="PRIVATE_VOICE_HUB_ID",
     )
+    promo_channel_id: int = Field(
+        default=1498085291506794549,
+        alias="PROMO_CHANNEL_ID",
+    )
+    itad_api_key: str = Field(default="", alias="ITAD_API_KEY")
+    itad_client_id: str = Field(default="", alias="ITAD_CLIENT_ID")
 
 
 @lru_cache

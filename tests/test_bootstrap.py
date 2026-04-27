@@ -20,7 +20,10 @@ def test_discover_cogs_starts_empty(monkeypatch: MonkeyPatch) -> None:
 
     cogs = discover_cogs()
 
-    assert cogs == ["bot.cogs.voice.private_voice_calls"]
+    assert cogs == [
+        "bot.cogs.games.promo_tracker",
+        "bot.cogs.voice.private_voice_calls",
+    ]
 
 
 def test_settings_default_command_prefix(monkeypatch: MonkeyPatch) -> None:
@@ -60,6 +63,19 @@ def test_settings_default_private_voice_hub(monkeypatch: MonkeyPatch) -> None:
     loaded_settings = get_settings()
 
     assert loaded_settings.private_voice_hub_id == 1498213727932256308
+
+
+def test_settings_default_promo_channel(monkeypatch: MonkeyPatch) -> None:
+    """Ensure settings keep the documented promotions channel."""
+
+    monkeypatch.setenv("DISCORD_TOKEN", "test-token")
+
+    from bot.config import get_settings
+
+    get_settings.cache_clear()
+    loaded_settings = get_settings()
+
+    assert loaded_settings.promo_channel_id == 1498085291506794549
 
 
 def test_private_voice_manager_builds_specified_call_name(
