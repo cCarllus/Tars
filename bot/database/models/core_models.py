@@ -112,6 +112,12 @@ class AutoModConfigModel:
     allowed_links: tuple[str, ...] = field(default_factory=tuple)
     dm_owner_on_action: bool = True
 
+    def __post_init__(self) -> None:
+        """Keep link moderation disabled while preserving old config fields."""
+
+        object.__setattr__(self, "block_links", False)
+        object.__setattr__(self, "allowed_links", ())
+
     def to_dict(self) -> dict[str, Any]:
         """Serialize the config for JSON persistence."""
 

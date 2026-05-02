@@ -86,7 +86,7 @@ def test_leveling_service_applies_message_cooldown_and_leaderboard(
     assert [record.user_id for record in leaderboard] == [1, 2]
 
 
-def test_auto_mod_evaluates_blocked_words_and_link_whitelist() -> None:
+def test_auto_mod_evaluates_blocked_words_and_allows_links() -> None:
     """Ensure configured moderation rules are deterministic."""
 
     service = AutoModService()
@@ -98,10 +98,9 @@ def test_auto_mod_evaluates_blocked_words_and_link_whitelist() -> None:
 
     blocked_word = service.evaluate_content("isso tem spamword aqui", config)
     allowed_link = service.evaluate_content("acesse https://example.com/a", config)
-    blocked_link = service.evaluate_content("acesse https://bad.test/a", config)
+    unlisted_link = service.evaluate_content("acesse https://bad.test/a", config)
 
     assert blocked_word.should_delete is True
     assert blocked_word.reason == "palavra bloqueada"
     assert allowed_link.should_delete is False
-    assert blocked_link.should_delete is True
-    assert blocked_link.reason == "link não permitido"
+    assert unlisted_link.should_delete is False

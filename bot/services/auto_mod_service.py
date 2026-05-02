@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from urllib.parse import urlparse
 
 import discord
 
@@ -12,8 +11,6 @@ from bot.services.audit_log_service import AuditLogService, audit_log_service
 from bot.services.core_config_service import CoreConfigService, core_config_service
 from bot.utils.queue_manager import discord_api_queue
 from bot.utils.safe_discord import safe_delete_message
-
-LINK_PREFIXES = ("http://", "https://")
 
 
 @dataclass(frozen=True)
@@ -91,30 +88,7 @@ class AutoModService:
                     reason="palavra bloqueada",
                 )
 
-        if config.block_links and self._has_blocked_link(normalized, config):
-            return AutoModResult(should_delete=True, reason="link não permitido")
-
         return AutoModResult(should_delete=False)
-
-    def _has_blocked_link(
-        self,
-        normalized_content: str,
-        config: AutoModConfigModel,
-    ) -> bool:
-        tokens = normalized_content.split()
-        allowed_domains = tuple(domain.casefold() for domain in config.allowed_links)
-        for token in tokens:
-            if not token.startswith(LINK_PREFIXES):
-                continue
-
-            hostname = urlparse(token).hostname or ""
-            is_allowed = any(
-                hostname == domain or hostname.endswith(f".{domain}")
-                for domain in allowed_domains
-            )
-            if not is_allowed:
-                return True
-        return False
 
 
 auto_mod_service = AutoModService()

@@ -58,8 +58,6 @@ def parse_dashboard_form(form: MultiDict[str, str]) -> DashboardConfigModel:
         auto_mod=AutoModConfigModel(
             enabled=_checkbox(form, "auto_mod_enabled"),
             blocked_words=_split_list(form.get("auto_mod_blocked_words", "")),
-            block_links=_checkbox(form, "auto_mod_block_links"),
-            allowed_links=_split_list(form.get("auto_mod_allowed_links", "")),
             dm_owner_on_action=_checkbox(form, "auto_mod_dm_owner_on_action"),
         ),
         leveling=LevelingConfigModel(

@@ -67,7 +67,8 @@ def test_dashboard_saves_config_through_core_service(
     assert loaded.logs.channel_id == 11
     assert int(loaded.logs.detail_level) == 3
     assert loaded.auto_role.role_id == 12
-    assert loaded.auto_mod.block_links is True
+    assert loaded.auto_mod.block_links is False
+    assert loaded.auto_mod.allowed_links == ()
     assert loaded.auto_mod.blocked_words == ("spam", "phishing")
     assert loaded.leveling.message_xp == 25
     assert loaded.leveling.level_xp_factor == 200

@@ -111,13 +111,11 @@
           <section class="rounded-2xl border border-white/10 bg-[#111] p-6 shadow-sm" id="moderacao">
             {{ section_title("shield-alert", "Auto-moderação", "text-purple-400") }}
             <div class="space-y-6">
-              <div class="grid grid-cols-1 gap-6 md:grid-cols-3">
+              <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
                 {{ toggle("auto_mod_enabled", "Ativo", config.auto_mod.enabled) }}
-                {{ toggle("auto_mod_block_links", "Bloquear links", config.auto_mod.block_links) }}
                 {{ toggle("auto_mod_dm_owner_on_action", "Alertar dono", config.auto_mod.dm_owner_on_action) }}
               </div>
               {{ textarea("auto_mod_blocked_words", "Palavras bloqueadas", config.auto_mod.blocked_words|join("\n"), 3) }}
-              {{ textarea("auto_mod_allowed_links", "Domínios permitidos", config.auto_mod.allowed_links|join("\n"), 3) }}
             </div>
           </section>
 

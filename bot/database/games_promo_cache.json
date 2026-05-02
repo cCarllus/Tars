@@ -1,7 +1,9 @@
 {
   "daily_post_counts": {
-    "2026-04-27": 2
+    "2026-04-27": 2,
+    "2026-05-02": 1
   },
+  "last_automatic_post_date": "2026-05-02",
   "posted_deal_keys": [
     "doomblade:epic game store:0",
     "typers combat:epic game store:0",
@@ -14,6 +16,12 @@
     "skullbreaker:steam:4.44",
     "emberstride:steam:4.44",
     "the divine invasion:epic game store:1.99",
-    "umm oyoun - ام عيون:epic game store:0.33"
+    "umm oyoun - ام عيون:epic game store:0.33",
+    "oddsparks: an automation adventure:epic game store:0",
+    "hogwarts legacy:epic game store:0",
+    "world of warships — marblehead lima pack:steam:0",
+    "overcome your fears - caretaker:steam:0",
+    "run from the cops!:steam:5.39",
+    "turbojoy:steam:5.39"
   ]
 }
