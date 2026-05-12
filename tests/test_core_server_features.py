@@ -104,3 +104,33 @@ def test_auto_mod_evaluates_blocked_words_and_allows_links() -> None:
     assert blocked_word.reason == "palavra bloqueada"
     assert allowed_link.should_delete is False
     assert unlisted_link.should_delete is False
+
+
+def test_auto_mod_blocks_domains_from_json(tmp_path: Path) -> None:
+    """Ensure JSON-configured forbidden domains are removed."""
+
+    blocked_domains_path = tmp_path / "blocked_domains.json"
+    blocked_domains_path.write_text(
+        """
+        {
+          "blocked_domains": [
+            "https://discord.gg/"
+          ]
+        }
+        """,
+        encoding="utf-8",
+    )
+    service = AutoModService(blocked_domains_path=blocked_domains_path)
+    config = AutoModConfigModel()
+
+    invite_link = service.evaluate_content(
+        "entra aqui https://discord.gg/SUkSusyu",
+        config,
+    )
+    common_link = service.evaluate_content("acesse https://example.com/a", config)
+    similar_domain = service.evaluate_content("acesse https://notdiscord.gg/a", config)
+
+    assert invite_link.should_delete is True
+    assert invite_link.reason == "domínio bloqueado (discord.gg)"
+    assert common_link.should_delete is False
+    assert similar_domain.should_delete is False
