@@ -368,6 +368,21 @@ class TicketService:
         )
         return await self._require_ticket(ticket_id)
 
+    async def set_private_voice_channel(
+        self,
+        *,
+        ticket_id: int,
+        private_voice_channel_id: int | None,
+    ) -> TicketModel:
+        """Persist or clear the optional private voice channel ID."""
+
+        await self._update_ticket(
+            ticket_id,
+            "private_voice_channel_id = ?, updated_at = ?",
+            (private_voice_channel_id, _utc_now().isoformat()),
+        )
+        return await self._require_ticket(ticket_id)
+
     async def add_proof(
         self,
         *,

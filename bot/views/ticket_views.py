@@ -67,6 +67,20 @@ class TicketInteractionHandler(Protocol):
     ) -> None:
         """Replace users in a ticket with the selected list."""
 
+    async def handle_create_ticket_voice_channel(
+        self,
+        interaction: discord.Interaction,
+        ticket_id: int,
+    ) -> None:
+        """Create a private voice channel for a ticket."""
+
+    async def handle_delete_ticket_voice_channel(
+        self,
+        interaction: discord.Interaction,
+        ticket_id: int,
+    ) -> None:
+        """Delete the private voice channel for a ticket."""
+
 
 class TicketTriageView(discord.ui.View):
     """Buttons displayed in the staff triage channel."""
@@ -195,6 +209,42 @@ class TicketAdminView(discord.ui.View):
         handler = await _handler_or_error(interaction)
         if handler is not None:
             await handler.handle_close_ticket(interaction, self.ticket_id)
+
+    @discord.ui.button(
+        label="Criar voz",
+        style=discord.ButtonStyle.secondary,
+        custom_id="tars_ticket_create_voice",
+    )
+    async def create_voice(
+        self,
+        interaction: discord.Interaction,
+        _: discord.ui.Button[TicketAdminView],
+    ) -> None:
+        """Create a voice channel for this ticket."""
+
+        handler = await _handler_or_error(interaction)
+        if handler is not None:
+            await handler.handle_create_ticket_voice_channel(
+                interaction, self.ticket_id
+            )
+
+    @discord.ui.button(
+        label="Excluir voz",
+        style=discord.ButtonStyle.secondary,
+        custom_id="tars_ticket_delete_voice",
+    )
+    async def delete_voice(
+        self,
+        interaction: discord.Interaction,
+        _: discord.ui.Button[TicketAdminView],
+    ) -> None:
+        """Delete the voice channel for this ticket."""
+
+        handler = await _handler_or_error(interaction)
+        if handler is not None:
+            await handler.handle_delete_ticket_voice_channel(
+                interaction, self.ticket_id
+            )
 
 
 class TicketParticipantSelect(discord.ui.UserSelect["TicketAdminView"]):

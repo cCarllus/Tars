@@ -78,7 +78,7 @@ def test_dashboard_saves_config_through_core_service(
     assert loaded.tickets.staff_role_ids == (31, 32)
     assert loaded.tickets.judge_role_ids == (31, 32)
     assert loaded.tickets.admin_role_ids == ()
-    assert loaded.tickets.create_voice_channel is True
+    assert loaded.tickets.create_voice_channel is False
     assert loaded.tickets.tribunal_majority_votes == 2
     assert audit_events[0]["event_type"] == "dashboard_config_updated"
 
@@ -190,7 +190,6 @@ def _dashboard_payload() -> dict[str, str]:
         "leveling_level_xp_factor": "200",
         "tickets_triage_channel_id": "30",
         "tickets_staff_role_ids": "31\n32\n31",
-        "tickets_create_voice_channel": "1",
         "tickets_ticket_expiration_hours": "72",
         "tickets_archive_after_hours": "24",
         "tickets_tribunal_majority_votes": "2",

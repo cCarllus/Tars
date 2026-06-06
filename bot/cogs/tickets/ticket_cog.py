@@ -556,6 +556,141 @@ class TicketCog(commands.Cog, name="TicketCog"):
             ephemeral=True,
         )
 
+    async def handle_create_ticket_voice_channel(
+        self,
+        interaction: discord.Interaction,
+        ticket_id: int,
+    ) -> None:
+        """Create a private voice channel for the conductor."""
+
+        guild = interaction.guild
+        if guild is None:
+            return
+
+        config = (await self.config_service.get_config(guild.id)).tickets
+        ticket = await self.ticket_service.get_ticket(ticket_id)
+        if ticket is None:
+            await interaction.response.send_message(
+                embed=build_embed(
+                    "Ticket não encontrado",
+                    "O ticket não existe.",
+                    ERROR_COLOR,
+                ),
+                ephemeral=True,
+            )
+            return
+
+        if not _user_is_ticket_conductor(interaction.user, ticket):
+            await interaction.response.send_message(
+                embed=build_embed(
+                    "Apenas o condutor",
+                    "Só quem aceitou e conduz este ticket pode criar voz.",
+                    ERROR_COLOR,
+                ),
+                ephemeral=True,
+            )
+            return
+
+        if ticket.private_voice_channel_id is not None:
+            existing = guild.get_channel(ticket.private_voice_channel_id)
+            if isinstance(existing, discord.VoiceChannel):
+                await interaction.response.send_message(
+                    embed=build_embed(
+                        "Voz já existe",
+                        f"Canal de voz do caso: <#{existing.id}>.",
+                        INFO_COLOR,
+                    ),
+                    ephemeral=True,
+                )
+                return
+
+        category = None
+        if ticket.category_channel_id is not None:
+            category_channel = guild.get_channel(ticket.category_channel_id)
+            if isinstance(category_channel, discord.CategoryChannel):
+                category = category_channel
+
+        voice_channel = await safe_create_voice_channel(
+            guild,
+            name=f"Ticket {ticket.id:04d}",
+            category=category,
+            overwrites=self._private_channel_overwrites(guild, ticket, config),
+            reason="Criar voz privada do ticket",
+        )
+        await self.ticket_service.set_private_voice_channel(
+            ticket_id=ticket.id,
+            private_voice_channel_id=voice_channel.id,
+        )
+        await interaction.response.send_message(
+            embed=build_embed(
+                "Voz criada",
+                f"Canal de voz criado: <#{voice_channel.id}>.",
+                SUCCESS_COLOR,
+            ),
+            ephemeral=True,
+        )
+
+    async def handle_delete_ticket_voice_channel(
+        self,
+        interaction: discord.Interaction,
+        ticket_id: int,
+    ) -> None:
+        """Delete the private voice channel for the conductor."""
+
+        guild = interaction.guild
+        if guild is None:
+            return
+
+        ticket = await self.ticket_service.get_ticket(ticket_id)
+        if ticket is None:
+            await interaction.response.send_message(
+                embed=build_embed(
+                    "Ticket não encontrado",
+                    "O ticket não existe.",
+                    ERROR_COLOR,
+                ),
+                ephemeral=True,
+            )
+            return
+
+        if not _user_is_ticket_conductor(interaction.user, ticket):
+            await interaction.response.send_message(
+                embed=build_embed(
+                    "Apenas o condutor",
+                    "Só quem aceitou e conduz este ticket pode excluir voz.",
+                    ERROR_COLOR,
+                ),
+                ephemeral=True,
+            )
+            return
+
+        deleted = False
+        if ticket.private_voice_channel_id is not None:
+            channel = guild.get_channel(ticket.private_voice_channel_id)
+            if isinstance(channel, discord.VoiceChannel):
+                await safe_delete_channel(
+                    channel,
+                    reason="Excluir voz privada do ticket",
+                )
+                deleted = True
+
+        await self.ticket_service.set_private_voice_channel(
+            ticket_id=ticket.id,
+            private_voice_channel_id=None,
+        )
+        await interaction.response.send_message(
+            embed=build_embed(
+                "Voz removida",
+                (
+                    "Canal de voz excluído."
+                    if deleted
+                    else "Não havia canal de voz ativo para este caso."
+                ),
+                SUCCESS_COLOR,
+            ),
+            ephemeral=True,
+        )
+
     async def handle_escalate_ticket(
         self,
         interaction: discord.Interaction,
@@ -937,21 +1072,11 @@ class TicketCog(commands.Cog, name="TicketCog"):
             overwrites=overwrites,
             reason=PRIVATE_CHANNEL_REASON,
         )
-        voice_channel: discord.VoiceChannel | None = None
-        if config.create_voice_channel:
-            voice_channel = await safe_create_voice_channel(
-                guild,
-                name=f"Ticket {ticket.id:04d}",
-                category=category,
-                overwrites=overwrites,
-                reason=PRIVATE_CHANNEL_REASON,
-            )
-
         updated = await self.ticket_service.record_private_channels(
             ticket_id=ticket.id,
             category_channel_id=category.id,
             private_text_channel_id=text_channel.id,
-            private_voice_channel_id=voice_channel.id if voice_channel else None,
+            private_voice_channel_id=None,
         )
         await safe_send_message(
             text_channel,

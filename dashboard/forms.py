@@ -90,7 +90,7 @@ def parse_dashboard_form(form: MultiDict[str, str]) -> DashboardConfigModel:
             staff_role_ids=ticket_role_ids,
             judge_role_ids=ticket_role_ids,
             admin_role_ids=(),
-            create_voice_channel=_checkbox(form, "tickets_create_voice_channel"),
+            create_voice_channel=False,
             ticket_expiration_hours=max(
                 1,
                 _non_negative_int(
