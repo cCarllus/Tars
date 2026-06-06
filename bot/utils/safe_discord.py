@@ -66,6 +66,48 @@ async def safe_create_voice_channel(
     )
 
 
+async def safe_create_category(
+    guild: discord.Guild,
+    *,
+    name: str,
+    overwrites: dict[discord.Role | discord.Member, discord.PermissionOverwrite],
+    reason: str,
+) -> discord.CategoryChannel:
+    """Create a category channel with retry, timeout and latency logging."""
+
+    return await _run_discord_operation(
+        action="create_category",
+        operation=lambda: guild.create_category(
+            name=name,
+            overwrites=overwrites,
+            reason=reason,
+        ),
+        guild_id=guild.id,
+    )
+
+
+async def safe_create_text_channel(
+    guild: discord.Guild,
+    *,
+    name: str,
+    category: discord.CategoryChannel | None,
+    overwrites: dict[discord.Role | discord.Member, discord.PermissionOverwrite],
+    reason: str,
+) -> discord.TextChannel:
+    """Create a text channel with retry, timeout and latency logging."""
+
+    return await _run_discord_operation(
+        action="create_text_channel",
+        operation=lambda: guild.create_text_channel(
+            name=name,
+            category=category,
+            overwrites=overwrites,
+            reason=reason,
+        ),
+        guild_id=guild.id,
+    )
+
+
 async def safe_move_member(
     member: discord.Member,
     channel: discord.VoiceChannel | None,

@@ -19,6 +19,13 @@
         </div>
       </div>
       <div class="flex flex-wrap items-center justify-end gap-3 text-base text-gray-400">
+        <a
+          class="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-gray-300 transition-colors hover:border-white/20 hover:text-white"
+          href="{{ url_for('tickets.list_tickets', guild_id=config.guild_id or tars_guild_id) }}"
+        >
+          <i data-lucide="ticket" class="h-4 w-4" stroke-width="1.5"></i>
+          Tickets
+        </a>
         <span class="hidden items-center gap-2 sm:flex">
           <i data-lucide="clock" class="h-4 w-4" stroke-width="1.5"></i>
           Atualizado em {{ config.updated_at.strftime("%d/%m/%Y %H:%M") }}
@@ -50,6 +57,7 @@
             {{ nav_item("#welcome", "user-plus", "Welcome", "text-cyan-400") }}
             {{ nav_item("#leave", "user-minus", "Leave", "text-red-400") }}
             {{ nav_item("#canais", "radio", "Canais e cargos", "text-amber-400") }}
+            {{ nav_item("#tickets", "ticket", "Tickets", "text-emerald-400") }}
             {{ nav_item("#moderacao", "shield-alert", "Auto-moderação", "text-purple-400") }}
             {{ nav_item("#xp", "zap", "XP", "text-blue-400") }}
           </nav>
@@ -105,6 +113,25 @@
               </label>
               {{ toggle("auto_role_enabled", "Cargo automático", config.auto_role.enabled) }}
               {{ text_input("auto_role_id", "Cargo automático", config.auto_role.role_id) }}
+            </div>
+          </section>
+
+          <section class="rounded-2xl border border-white/10 bg-[#111] p-6 shadow-sm" id="tickets">
+            {{ section_title("ticket", "Tickets e Tribunal", "text-emerald-400") }}
+            <div class="space-y-6">
+              <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                {{ text_input("tickets_triage_channel_id", "Canal de triagem", config.tickets.triage_channel_id) }}
+                {{ number_input("tickets_tribunal_majority_votes", "Votos para maioria", config.tickets.tribunal_majority_votes) }}
+                {{ number_input("tickets_ticket_expiration_hours", "Expiração (horas)", config.tickets.ticket_expiration_hours) }}
+                {{ number_input("tickets_archive_after_hours", "Arquivar após fechar (horas)", config.tickets.archive_after_hours) }}
+              </div>
+              <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                {{ toggle("tickets_create_voice_channel", "Criar voz privada", config.tickets.create_voice_channel) }}
+                {{ toggle("tickets_anonymous_reports_enabled", "Reports anônimos", config.tickets.anonymous_reports_enabled) }}
+              </div>
+              <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                {{ textarea("tickets_staff_role_ids", "Roles que podem aceitar tickets", config.tickets.staff_role_ids|join("\n"), 4) }}
+              </div>
             </div>
           </section>
 

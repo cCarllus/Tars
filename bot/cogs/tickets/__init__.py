@@ -1,0 +1,1 @@
+"""Ticket and Tribunal cogs."""

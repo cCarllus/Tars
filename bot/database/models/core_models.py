@@ -184,6 +184,60 @@ class LevelingConfigModel:
 
 
 @dataclass(frozen=True)
+class TicketConfigModel:
+    """Dashboard-owned configuration for tickets and Tribunal workflows."""
+
+    triage_channel_id: int | None = None
+    staff_role_ids: tuple[int, ...] = field(default_factory=tuple)
+    judge_role_ids: tuple[int, ...] = field(default_factory=tuple)
+    admin_role_ids: tuple[int, ...] = field(default_factory=tuple)
+    create_voice_channel: bool = False
+    ticket_expiration_hours: int = 72
+    archive_after_hours: int = 24
+    tribunal_majority_votes: int = 3
+    anonymous_reports_enabled: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the config for JSON persistence."""
+
+        return {
+            "triage_channel_id": self.triage_channel_id,
+            "staff_role_ids": list(self.staff_role_ids),
+            "judge_role_ids": list(self.judge_role_ids),
+            "admin_role_ids": list(self.admin_role_ids),
+            "create_voice_channel": self.create_voice_channel,
+            "ticket_expiration_hours": self.ticket_expiration_hours,
+            "archive_after_hours": self.archive_after_hours,
+            "tribunal_majority_votes": self.tribunal_majority_votes,
+            "anonymous_reports_enabled": self.anonymous_reports_enabled,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> Self:
+        """Deserialize the ticket config from Dashboard JSON."""
+
+        return cls(
+            triage_channel_id=_optional_int(payload.get("triage_channel_id")),
+            staff_role_ids=_int_tuple(payload.get("staff_role_ids", [])),
+            judge_role_ids=_int_tuple(payload.get("judge_role_ids", [])),
+            admin_role_ids=_int_tuple(payload.get("admin_role_ids", [])),
+            create_voice_channel=bool(payload.get("create_voice_channel", False)),
+            ticket_expiration_hours=max(
+                1,
+                int(payload.get("ticket_expiration_hours", 72)),
+            ),
+            archive_after_hours=max(1, int(payload.get("archive_after_hours", 24))),
+            tribunal_majority_votes=max(
+                1,
+                int(payload.get("tribunal_majority_votes", 3)),
+            ),
+            anonymous_reports_enabled=bool(
+                payload.get("anonymous_reports_enabled", False),
+            ),
+        )
+
+
+@dataclass(frozen=True)
 class DashboardConfigModel:
     """Full guild configuration controlled by the Dashboard."""
 
@@ -200,6 +254,7 @@ class DashboardConfigModel:
     auto_role: AutoRoleConfigModel = field(default_factory=AutoRoleConfigModel)
     auto_mod: AutoModConfigModel = field(default_factory=AutoModConfigModel)
     leveling: LevelingConfigModel = field(default_factory=LevelingConfigModel)
+    tickets: TicketConfigModel = field(default_factory=TicketConfigModel)
     updated_at: datetime = field(
         default_factory=lambda: datetime.now(tz=timezone.utc),  # noqa: UP017
     )
@@ -216,6 +271,7 @@ class DashboardConfigModel:
             "auto_role": self.auto_role.to_dict(),
             "auto_mod": self.auto_mod.to_dict(),
             "leveling": self.leveling.to_dict(),
+            "tickets": self.tickets.to_dict(),
             "updated_at": self.updated_at.isoformat(),
         }
 
@@ -238,6 +294,7 @@ class DashboardConfigModel:
             auto_role=AutoRoleConfigModel.from_dict(payload.get("auto_role", {})),
             auto_mod=AutoModConfigModel.from_dict(payload.get("auto_mod", {})),
             leveling=LevelingConfigModel.from_dict(payload.get("leveling", {})),
+            tickets=TicketConfigModel.from_dict(payload.get("tickets", {})),
             updated_at=_parse_optional_datetime(payload.get("updated_at")),
         )
 
@@ -259,6 +316,12 @@ def _optional_int(value: object) -> int | None:
     if value is None or value == "":
         return None
     return int(str(value))
+
+
+def _int_tuple(value: object) -> tuple[int, ...]:
+    if not isinstance(value, list | tuple):
+        return ()
+    return tuple(int(str(item)) for item in value if str(item).strip())
 
 
 def _parse_optional_datetime(value: object) -> datetime:

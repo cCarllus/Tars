@@ -14,6 +14,7 @@ from bot.database.models.core_models import (
     LevelingConfigModel,
     LogConfigModel,
     LogDetailLevel,
+    TicketConfigModel,
     WelcomeConfigModel,
 )
 
@@ -39,6 +40,8 @@ def parse_dashboard_form(form: MultiDict[str, str]) -> DashboardConfigModel:
 
     guild_id = _required_int(form, "guild_id", "ID do servidor")
     owner_user_id = _required_int(form, "owner_user_id", "ID do dono")
+
+    ticket_role_ids = _split_int_list(form.get("tickets_staff_role_ids", ""))
 
     return DashboardConfigModel(
         guild_id=guild_id,
@@ -80,6 +83,41 @@ def parse_dashboard_form(form: MultiDict[str, str]) -> DashboardConfigModel:
             level_xp_factor=max(
                 1,
                 _non_negative_int(form, "leveling_level_xp_factor", "Fator de nível"),
+            ),
+        ),
+        tickets=TicketConfigModel(
+            triage_channel_id=_optional_int(form.get("tickets_triage_channel_id")),
+            staff_role_ids=ticket_role_ids,
+            judge_role_ids=ticket_role_ids,
+            admin_role_ids=(),
+            create_voice_channel=_checkbox(form, "tickets_create_voice_channel"),
+            ticket_expiration_hours=max(
+                1,
+                _non_negative_int(
+                    form,
+                    "tickets_ticket_expiration_hours",
+                    "Expiração de tickets",
+                ),
+            ),
+            archive_after_hours=max(
+                1,
+                _non_negative_int(
+                    form,
+                    "tickets_archive_after_hours",
+                    "Arquivamento de tickets",
+                ),
+            ),
+            tribunal_majority_votes=max(
+                1,
+                _non_negative_int(
+                    form,
+                    "tickets_tribunal_majority_votes",
+                    "Maioria do Tribunal",
+                ),
+            ),
+            anonymous_reports_enabled=_checkbox(
+                form,
+                "tickets_anonymous_reports_enabled",
             ),
         ),
     )
@@ -174,3 +212,13 @@ def _split_list(value: str) -> tuple[str, ...]:
         if item.strip()
     ]
     return tuple(dict.fromkeys(items))
+
+
+def _split_int_list(value: str) -> tuple[int, ...]:
+    raw_items = _split_list(value)
+    try:
+        return tuple(dict.fromkeys(int(item) for item in raw_items))
+    except ValueError as exc:
+        raise DashboardFormError(
+            "Listas de cargos aceitam apenas IDs numéricos.",
+        ) from exc

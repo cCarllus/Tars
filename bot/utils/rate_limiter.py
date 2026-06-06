@@ -71,6 +71,15 @@ class RateLimiter:
         }
         self._hits: dict[tuple[str, str, int], deque[float]] = defaultdict(deque)
 
+    def set_action_rules(
+        self,
+        action: str,
+        rules: dict[str, RateLimitRule],
+    ) -> None:
+        """Configure rate-limit buckets for an action."""
+
+        self._action_rules[action] = rules
+
     async def check(
         self,
         *,

@@ -1,12 +1,11 @@
 {
   "daily_post_counts": {
-    "2026-04-27": 2,
-    "2026-05-02": 1,
     "2026-05-13": 1,
     "2026-05-16": 1,
-    "2026-05-19": 1
+    "2026-05-19": 1,
+    "2026-06-06": 1
   },
-  "last_automatic_post_date": "2026-05-19",
+  "last_automatic_post_date": "2026-06-06",
   "posted_deal_keys": [
     "doomblade:epic game store:0",
     "typers combat:epic game store:0",
@@ -42,6 +41,12 @@
     "terrors to unveil - day off:steam:0",
     "dino running from a furry: gamesforfarm:steam:0",
     "new year 2026:steam:342.9",
-    "aquadream soundtrack:steam:0"
+    "aquadream soundtrack:steam:0",
+    "songs of conquest:epic game store:0",
+    "rogue waters:epic game store:0",
+    "gravity circuit:steam:0",
+    "tell me why: chapter 1:steam:0",
+    "crazy car deluxe edition:steam:18.26",
+    "fantasyland deluxe edition:steam:18.26"
   ]
 }

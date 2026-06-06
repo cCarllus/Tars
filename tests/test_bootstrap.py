@@ -26,6 +26,7 @@ def test_discover_cogs_starts_empty(monkeypatch: MonkeyPatch) -> None:
         "bot.cogs.core.leveling",
         "bot.cogs.core.welcome_leave",
         "bot.cogs.games.promo_tracker",
+        "bot.cogs.tickets.ticket_cog",
         "bot.cogs.voice.private_voice_calls",
     ]
 
