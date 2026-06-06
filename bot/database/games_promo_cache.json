@@ -3,6 +3,14 @@
     "2026-05-13": 1,
     "2026-05-16": 1,
     "2026-05-19": 1,
+<<<<<<< HEAD
+=======
+    "2026-05-22": 1,
+    "2026-05-25": 1,
+    "2026-05-28": 1,
+    "2026-05-31": 1,
+    "2026-06-03": 1,
+>>>>>>> 0acdda8 (fix)
     "2026-06-06": 1
   },
   "last_automatic_post_date": "2026-06-06",
@@ -42,10 +50,31 @@
     "dino running from a furry: gamesforfarm:steam:0",
     "new year 2026:steam:342.9",
     "aquadream soundtrack:steam:0",
+<<<<<<< HEAD
     "songs of conquest:epic game store:0",
     "rogue waters:epic game store:0",
     "gravity circuit:steam:0",
     "tell me why: chapter 1:steam:0",
+=======
+    "down in bermuda:epic game store:0",
+    "tomb raider i-iii remastered:epic game store:0",
+    "warhammer 40,000: gladius - relics of war:steam:0",
+    "car mechanic simulator 2018:steam:0",
+    "bunny guys!:steam:0",
+    "bunny hurling:steam:0",
+    "veteran racer:steam:2.74",
+    "calico:epic game store:0",
+    "lonestar:epic game store:0",
+    "bunny guys!:epic game store:0",
+    "moonrise fall:steam:0",
+    "iq under construction:steam:0",
+    "drift86:steam:0",
+    "gravity circuit:steam:0",
+    "tell me why: chapter 1:steam:0",
+    "winexy:steam:0",
+    "songs of conquest:epic game store:0",
+    "rogue waters:epic game store:0",
+>>>>>>> 0acdda8 (fix)
     "crazy car deluxe edition:steam:18.26",
     "fantasyland deluxe edition:steam:18.26"
   ]
