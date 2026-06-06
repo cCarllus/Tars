@@ -35,7 +35,14 @@ from bot.utils.safe_discord import (
     safe_delete_channel,
     safe_delete_message,
     safe_edit_channel_permissions,
+    safe_send_dm,
     safe_send_message,
+)
+from bot.utils.ticket_utils import (
+    build_ticket_transcript,
+    create_ticket_embed,
+    create_transcript_file,
+    ticket_rate_limit_message,
 )
 from bot.views.ticket_views import (
     TicketAdminView,
@@ -81,7 +88,7 @@ class TicketCog(commands.Cog, name="TicketCog"):
             {
                 "global": RateLimitRule(limit=80, window_seconds=60),
                 "guild": RateLimitRule(limit=20, window_seconds=60),
-                "user": RateLimitRule(limit=2, window_seconds=120),
+                "user": RateLimitRule(limit=2, window_seconds=3600),
             },
         )
 
@@ -145,6 +152,8 @@ class TicketCog(commands.Cog, name="TicketCog"):
 
         participant_ids = await self.ticket_service.list_participant_user_ids(ticket.id)
         if message.author.id in participant_ids:
+            if message.attachments:
+                await self._record_attachment_proof(message, ticket)
             return
 
         await safe_delete_message(
@@ -297,6 +306,8 @@ class TicketCog(commands.Cog, name="TicketCog"):
             description=f"Ticket #{channel_ticket.id:04d} aceito por staff.",
             actor_user_id=interaction.user.id,
         )
+        if config.dm_notifications_enabled:
+            await self._notify_ticket_creator_accepted(guild, channel_ticket)
         await interaction.followup.send(
             embed=build_embed(
                 "Ticket aceito",
@@ -407,6 +418,7 @@ class TicketCog(commands.Cog, name="TicketCog"):
             ),
             ephemeral=True,
         )
+        await self._send_ticket_closure_artifacts(guild, ticket, config)
         await self._delete_ticket_private_channels(
             guild,
             ticket,
@@ -555,6 +567,14 @@ class TicketCog(commands.Cog, name="TicketCog"):
             ),
             ephemeral=True,
         )
+        await self._log_ticket_action(
+            guild=guild,
+            ticket=ticket,
+            event_type="ticket_participants_updated",
+            title="Participantes atualizados",
+            description="\n".join(description_parts),
+            actor_user_id=interaction.user.id,
+        )
 
     async def handle_create_ticket_voice_channel(
         self,
@@ -621,6 +641,16 @@ class TicketCog(commands.Cog, name="TicketCog"):
             ticket_id=ticket.id,
             private_voice_channel_id=voice_channel.id,
         )
+        updated_ticket = await self.ticket_service.get_ticket(ticket.id)
+        if updated_ticket is not None:
+            await self._log_ticket_action(
+                guild=guild,
+                ticket=updated_ticket,
+                event_type="ticket_voice_created",
+                title="Voz do ticket criada",
+                description=f"Canal de voz criado: <#{voice_channel.id}>.",
+                actor_user_id=interaction.user.id,
+            )
         await interaction.response.send_message(
             embed=build_embed(
                 "Voz criada",
@@ -677,6 +707,18 @@ class TicketCog(commands.Cog, name="TicketCog"):
         await self.ticket_service.set_private_voice_channel(
             ticket_id=ticket.id,
             private_voice_channel_id=None,
+        )
+        await self._log_ticket_action(
+            guild=guild,
+            ticket=ticket,
+            event_type="ticket_voice_deleted",
+            title="Voz do ticket removida",
+            description=(
+                "Canal de voz removido."
+                if deleted
+                else "Nenhum canal de voz ativo foi encontrado."
+            ),
+            actor_user_id=interaction.user.id,
         )
         await interaction.response.send_message(
             embed=build_embed(
@@ -920,23 +962,47 @@ class TicketCog(commands.Cog, name="TicketCog"):
             )
             return
 
-        limit = await self.limiter.check(
-            action=TICKET_CREATION_ACTION,
-            user_id=interaction.user.id,
+        config = (await self.config_service.get_config(guild.id)).tickets
+        recent_ticket_count = await self.ticket_service.count_recent_user_tickets(
             guild_id=guild.id,
+            creator_user_id=interaction.user.id,
+            window_seconds=config.rate_limit_window_seconds,
         )
-        if not limit.allowed:
+        if recent_ticket_count >= config.rate_limit_ticket_count:
             await interaction.response.send_message(
                 embed=build_embed(
                     "Calma aí",
-                    f"Você pode abrir outro ticket em {limit.retry_after:.0f}s.",
+                    ticket_rate_limit_message(
+                        config.rate_limit_ticket_count,
+                        config.rate_limit_window_seconds,
+                    ),
                     ERROR_COLOR,
                 ),
                 ephemeral=True,
             )
             return
 
-        config = (await self.config_service.get_config(guild.id)).tickets
+        similar_ticket = await self.ticket_service.find_recent_similar_ticket(
+            guild_id=guild.id,
+            creator_user_id=interaction.user.id,
+            ticket_type=ticket_type,
+            description=description,
+            window_seconds=config.rate_limit_window_seconds,
+        )
+        if similar_ticket is not None:
+            await interaction.response.send_message(
+                embed=build_embed(
+                    "Ticket repetido",
+                    (
+                        f"Você já abriu um ticket parecido recentemente: "
+                        f"#{similar_ticket.id:04d}."
+                    ),
+                    ERROR_COLOR,
+                ),
+                ephemeral=True,
+            )
+            return
+
         triage_channel = await self._resolve_triage_channel(guild, config)
         if triage_channel is None:
             await interaction.response.send_message(
@@ -1253,6 +1319,8 @@ class TicketCog(commands.Cog, name="TicketCog"):
             description=reason,
             actor_user_id=actor_user_id,
         )
+        config = (await self.config_service.get_config(guild.id)).tickets
+        await self._send_ticket_closure_artifacts(guild, closed, config)
         await self._delete_ticket_private_channels(
             guild,
             closed,
@@ -1278,6 +1346,7 @@ class TicketCog(commands.Cog, name="TicketCog"):
                 reason="Ticket expirado automaticamente.",
             )
             if guild is not None:
+                config = (await self.config_service.get_config(guild.id)).tickets
                 await self._log_ticket_action(
                     guild=guild,
                     ticket=closed,
@@ -1286,6 +1355,7 @@ class TicketCog(commands.Cog, name="TicketCog"):
                     description=f"Ticket #{ticket.id:04d} fechado por expiração.",
                     actor_user_id=None,
                 )
+                await self._send_ticket_closure_artifacts(guild, closed, config)
                 await self._delete_ticket_private_channels(
                     guild,
                     closed,
@@ -1347,6 +1417,179 @@ class TicketCog(commands.Cog, name="TicketCog"):
                     reason="Atualizar participante do caso",
                 )
 
+    async def _record_attachment_proof(
+        self,
+        message: discord.Message,
+        ticket: TicketModel,
+    ) -> None:
+        """Persist private-channel attachments as ticket proof records."""
+
+        attachment_urls = tuple(attachment.url for attachment in message.attachments)
+        if not attachment_urls:
+            return
+
+        proof = await self.ticket_service.add_proof(
+            ticket_id=ticket.id,
+            actor_user_id=message.author.id,
+            description=message.content or "Anexo enviado no canal do ticket.",
+            attachment_urls=attachment_urls,
+        )
+        proofs = await self.ticket_service.list_proofs(ticket.id)
+        await safe_send_message(
+            message.channel,
+            embed=create_ticket_embed(
+                ticket,
+                title=f"Anexo registrado #{ticket.id:04d}",
+                description=proof.description,
+                fields=(
+                    (
+                        "Anexos",
+                        "\n".join(proof.attachment_urls),
+                        False,
+                    ),
+                ),
+                proofs=proofs,
+            ),
+            reason="send_ticket_attachment_proof_summary",
+        )
+
+    async def _send_ticket_closure_artifacts(
+        self,
+        guild: discord.Guild,
+        ticket: TicketModel,
+        config: TicketConfigModel,
+    ) -> None:
+        """Send transcript and creator DM before private channel deletion."""
+
+        transcript_text: str | None = None
+        proofs = await self.ticket_service.list_proofs(ticket.id)
+        text_channel = self._resolve_ticket_text_channel(guild, ticket)
+        if text_channel is not None:
+            transcript_text = await build_ticket_transcript(
+                ticket=ticket,
+                channel=text_channel,
+                proofs=proofs,
+            )
+            transcript_channel = await self._resolve_transcript_channel(guild, config)
+            if transcript_channel is not None:
+                await safe_send_message(
+                    transcript_channel,
+                    embed=create_ticket_embed(
+                        ticket,
+                        title=f"Transcript #{ticket.id:04d}",
+                        description=ticket.close_reason or "Ticket fechado.",
+                        fields=(
+                            (
+                                "Canal",
+                                f"<#{ticket.private_text_channel_id}>",
+                                True,
+                            ),
+                        ),
+                    ),
+                    file=create_transcript_file(
+                        ticket=ticket,
+                        transcript_text=transcript_text,
+                    ),
+                    reason="send_ticket_transcript",
+                )
+
+        if config.dm_notifications_enabled:
+            await self._notify_ticket_creator_closed(
+                guild,
+                ticket,
+                transcript_text=transcript_text,
+            )
+
+    def _resolve_ticket_text_channel(
+        self,
+        guild: discord.Guild,
+        ticket: TicketModel,
+    ) -> discord.TextChannel | None:
+        if ticket.private_text_channel_id is None:
+            return None
+        channel = guild.get_channel(ticket.private_text_channel_id)
+        if isinstance(channel, discord.TextChannel):
+            return channel
+        return None
+
+    async def _resolve_transcript_channel(
+        self,
+        guild: discord.Guild,
+        config: TicketConfigModel,
+    ) -> discord.TextChannel | None:
+        if config.transcript_channel_id is not None:
+            channel = guild.get_channel(config.transcript_channel_id)
+            if isinstance(channel, discord.TextChannel):
+                return channel
+
+        full_config = await self.config_service.get_config(guild.id)
+        if full_config.logs.channel_id is not None:
+            channel = guild.get_channel(full_config.logs.channel_id)
+            if isinstance(channel, discord.TextChannel):
+                return channel
+
+        if isinstance(guild.system_channel, discord.TextChannel):
+            return guild.system_channel
+        return None
+
+    async def _notify_ticket_creator_accepted(
+        self,
+        guild: discord.Guild,
+        ticket: TicketModel,
+    ) -> None:
+        creator = await _resolve_member(guild, ticket.creator_user_id)
+        if creator is None:
+            return
+
+        channel_link = (
+            f"https://discord.com/channels/{guild.id}/{ticket.private_text_channel_id}"
+            if ticket.private_text_channel_id is not None
+            else "Canal privado ainda indisponível."
+        )
+        try:
+            await safe_send_dm(
+                creator,
+                embed=create_ticket_embed(
+                    ticket,
+                    title=f"Ticket aceito #{ticket.id:04d}",
+                    description="A staff aceitou seu ticket.",
+                    fields=(("Canal", channel_link, False),),
+                ),
+            )
+        except discord.HTTPException:
+            logger.info("Could not DM ticket creator ticket_id=%s", ticket.id)
+
+    async def _notify_ticket_creator_closed(
+        self,
+        guild: discord.Guild,
+        ticket: TicketModel,
+        *,
+        transcript_text: str | None,
+    ) -> None:
+        creator = await _resolve_member(guild, ticket.creator_user_id)
+        if creator is None:
+            return
+
+        try:
+            await safe_send_dm(
+                creator,
+                embed=create_ticket_embed(
+                    ticket,
+                    title=f"Ticket fechado #{ticket.id:04d}",
+                    description=ticket.close_reason or "Seu ticket foi fechado.",
+                ),
+                file=(
+                    create_transcript_file(
+                        ticket=ticket,
+                        transcript_text=transcript_text,
+                    )
+                    if transcript_text is not None
+                    else None
+                ),
+            )
+        except discord.HTTPException:
+            logger.info("Could not DM ticket creator ticket_id=%s", ticket.id)
+
     async def _delete_ticket_private_channels(
         self,
         guild: discord.Guild,
@@ -1400,17 +1643,25 @@ class TicketCog(commands.Cog, name="TicketCog"):
         description: str,
         actor_user_id: int | None,
     ) -> None:
+        payload = {
+            "ticket_id": ticket.id,
+            "ticket_type": ticket.ticket_type.value,
+            "status": ticket.status.value,
+            "target_user_id": ticket.target_user_id,
+        }
+        await self.ticket_service.log_action(
+            ticket_id=ticket.id,
+            actor_user_id=actor_user_id,
+            action=event_type,
+            details=description,
+            payload=payload,
+        )
         await audit_log_service.log_event(
             guild=guild,
             event_type=event_type,
             title=title,
             description=description,
-            payload={
-                "ticket_id": ticket.id,
-                "ticket_type": ticket.ticket_type.value,
-                "status": ticket.status.value,
-                "target_user_id": ticket.target_user_id,
-            },
+            payload=payload,
             actor_user_id=actor_user_id,
             target_user_id=ticket.target_user_id,
             color=INFO_COLOR,
@@ -1493,81 +1744,78 @@ def _ticket_mentions(ticket: TicketModel) -> str:
 
 def _ticket_triage_embed(ticket: TicketModel) -> discord.Embed:
     ticket_label = "Suporte" if ticket.ticket_type == TicketType.SUPPORT else "Denúncia"
-    reporter = "Anônimo" if ticket.anonymous_report else f"<@{ticket.creator_user_id}>"
-    embed = build_embed(
+    return create_ticket_embed(
+        ticket,
         title=f"{ticket_label} #{ticket.id:04d}",
         description=ticket.description,
-        color=INFO_COLOR,
+        fields=(
+            (
+                "Alvo",
+                f"<@{ticket.target_user_id}>" if ticket.target_user_id else "Nenhum",
+                True,
+            ),
+            ("Expira em", ticket.expires_at.strftime("%d/%m %H:%M"), True),
+        ),
     )
-    embed.add_field(name="Criador", value=reporter, inline=True)
-    embed.add_field(
-        name="Alvo",
-        value=f"<@{ticket.target_user_id}>" if ticket.target_user_id else "Nenhum",
-        inline=True,
-    )
-    embed.add_field(name="Expira em", value=ticket.expires_at.strftime("%d/%m %H:%M"))
-    return embed
 
 
 def _private_ticket_embed(ticket: TicketModel) -> discord.Embed:
-    embed = build_embed(
+    return create_ticket_embed(
+        ticket,
         title=f"Ticket #{ticket.id:04d}",
         description="Canal privado criado para triagem e resolução do caso.",
-        color=SUCCESS_COLOR,
-    )
-    embed.add_field(name="Tipo", value=ticket.ticket_type.value, inline=True)
-    embed.add_field(name="Criador", value=f"<@{ticket.creator_user_id}>", inline=True)
-    embed.add_field(
-        name="Alvo",
-        value=f"<@{ticket.target_user_id}>" if ticket.target_user_id else "Nenhum",
-        inline=True,
-    )
-    embed.add_field(
-        name="Aceito por",
-        value=(
-            f"<@{ticket.accepted_by_user_id}>"
-            if ticket.accepted_by_user_id
-            else "Aguardando staff"
+        fields=(
+            (
+                "Alvo",
+                f"<@{ticket.target_user_id}>" if ticket.target_user_id else "Nenhum",
+                True,
+            ),
+            (
+                "Aceito por",
+                (
+                    f"<@{ticket.accepted_by_user_id}>"
+                    if ticket.accepted_by_user_id
+                    else "Aguardando staff"
+                ),
+                True,
+            ),
+            (
+                "Condutor",
+                (
+                    f"<@{ticket.accepted_by_user_id}>"
+                    if ticket.accepted_by_user_id
+                    else "Aguardando staff"
+                ),
+                True,
+            ),
         ),
-        inline=True,
     )
-    embed.add_field(
-        name="Condutor",
-        value=(
-            f"<@{ticket.accepted_by_user_id}>"
-            if ticket.accepted_by_user_id
-            else "Aguardando staff"
-        ),
-        inline=True,
-    )
-    return embed
 
 
 def _ticket_admin_panel_embed(ticket: TicketModel) -> discord.Embed:
-    embed = build_embed(
+    fields: list[tuple[str, str, bool]] = []
+    if ticket.private_text_channel_id is not None:
+        fields.append(("Canal do caso", f"<#{ticket.private_text_channel_id}>", True))
+    fields.append(
+        (
+            "Condutor",
+            (
+                f"<@{ticket.accepted_by_user_id}>"
+                if ticket.accepted_by_user_id
+                else "Aguardando staff"
+            ),
+            True,
+        ),
+    )
+    return create_ticket_embed(
+        ticket,
         title=f"Painel administrativo #{ticket.id:04d}",
         description=(
             "Use este painel para gerenciar participantes, escalar para Tribunal "
             "ou encerrar o caso."
         ),
-        color=INFO_COLOR,
+        fields=tuple(fields),
     )
-    if ticket.private_text_channel_id is not None:
-        embed.add_field(
-            name="Canal do caso",
-            value=f"<#{ticket.private_text_channel_id}>",
-            inline=True,
-        )
-    embed.add_field(
-        name="Condutor",
-        value=(
-            f"<@{ticket.accepted_by_user_id}>"
-            if ticket.accepted_by_user_id
-            else "Aguardando staff"
-        ),
-        inline=True,
-    )
-    return embed
 
 
 def _tribunal_embed(
@@ -1575,22 +1823,26 @@ def _tribunal_embed(
     majority_votes: int,
     target_user_ids: tuple[int, ...],
 ) -> discord.Embed:
-    embed = build_embed(
+    return create_ticket_embed(
+        ticket,
         title=f"Tribunal #{ticket.id:04d}",
         description=ticket.description,
-        color=INFO_COLOR,
-    )
-    embed.add_field(name="Maioria", value=f"{majority_votes} voto(s)", inline=True)
-    embed.add_field(
-        name="Alvos da ação",
-        value=(
-            " ".join(f"<@{target_user_id}>" for target_user_id in target_user_ids)
-            if target_user_ids
-            else "A definir"
+        variant="tribunal",
+        fields=(
+            ("Maioria", f"{majority_votes} voto(s)", True),
+            (
+                "Alvos da ação",
+                (
+                    " ".join(
+                        f"<@{target_user_id}>" for target_user_id in target_user_ids
+                    )
+                    if target_user_ids
+                    else "A definir"
+                ),
+                True,
+            ),
         ),
-        inline=True,
     )
-    return embed
 
 
 def _decision_label(decision: TribunalVoteChoice) -> str:

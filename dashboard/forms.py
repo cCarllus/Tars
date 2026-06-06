@@ -119,6 +119,30 @@ def parse_dashboard_form(form: MultiDict[str, str]) -> DashboardConfigModel:
                 form,
                 "tickets_anonymous_reports_enabled",
             ),
+            rate_limit_ticket_count=max(
+                1,
+                _non_negative_int(
+                    form,
+                    "tickets_rate_limit_ticket_count",
+                    "Limite de tickets",
+                ),
+            ),
+            rate_limit_window_seconds=max(
+                60,
+                _non_negative_int(
+                    form,
+                    "tickets_rate_limit_window_minutes",
+                    "Janela de rate limit",
+                )
+                * 60,
+            ),
+            transcript_channel_id=_optional_int(
+                form.get("tickets_transcript_channel_id"),
+            ),
+            dm_notifications_enabled=_checkbox(
+                form,
+                "tickets_dm_notifications_enabled",
+            ),
         ),
     )
 

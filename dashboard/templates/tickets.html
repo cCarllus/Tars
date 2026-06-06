@@ -7,11 +7,11 @@
     <div class="mx-auto flex max-w-[90rem] items-center justify-between gap-6 px-6 py-4">
       <div class="flex items-center gap-4">
         <a
-          class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 shadow-[0_0_15px_rgba(16,185,129,0.25)]"
+          class="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.2)]"
           href="{{ url_for('config.dashboard') }}"
           aria-label="Voltar para configurações"
         >
-          <i data-lucide="ticket" class="h-6 w-6 text-white" stroke-width="1.5"></i>
+          <i data-lucide="ticket" class="h-6 w-6 text-black" stroke-width="2"></i>
         </a>
         <div>
           <h1 class="text-2xl font-semibold leading-tight tracking-tight text-white">Tickets</h1>
@@ -29,16 +29,20 @@
   </header>
 
   <main class="mx-auto max-w-[90rem] px-6 py-8">
-    <form class="mb-6 grid grid-cols-1 gap-4 rounded-2xl border border-white/10 bg-[#111] p-5 md:grid-cols-[1fr_220px_auto]" method="get">
+    <form class="mb-6 grid grid-cols-1 gap-4 border-b border-white/10 pb-6 md:grid-cols-6" method="get">
       <input type="hidden" name="guild_id" value="{{ guild_id }}">
-      <label class="block">
+      <label class="block md:col-span-2">
         <span class="mb-2 block text-base text-gray-400">Busca</span>
-        <input
-          class="{{ field_class() }}"
-          name="q"
-          value="{{ search }}"
-          placeholder="ID ou descrição"
-        >
+        <input class="{{ field_class() }}" name="q" value="{{ search }}" placeholder="ID ou descrição">
+      </label>
+      <label class="block">
+        <span class="mb-2 block text-base text-gray-400">Tipo</span>
+        <select class="{{ field_class() }}" name="type">
+          <option value="" {% if not selected_type %}selected{% endif %}>Todos</option>
+          {% for ticket_type in ticket_types %}
+            <option value="{{ ticket_type.value }}" {% if selected_type == ticket_type.value %}selected{% endif %}>{{ ticket_type.value }}</option>
+          {% endfor %}
+        </select>
       </label>
       <label class="block">
         <span class="mb-2 block text-base text-gray-400">Status</span>
@@ -49,9 +53,17 @@
           {% endfor %}
         </select>
       </label>
-      <div class="flex items-end">
+      <label class="block">
+        <span class="mb-2 block text-base text-gray-400">De</span>
+        <input class="{{ field_class() }}" type="date" name="date_from" value="{{ date_from }}">
+      </label>
+      <label class="block">
+        <span class="mb-2 block text-base text-gray-400">Até</span>
+        <input class="{{ field_class() }}" type="date" name="date_to" value="{{ date_to }}">
+      </label>
+      <div class="flex items-end md:col-span-6">
         <button
-          class="flex h-[50px] items-center gap-2 rounded-xl bg-cyan-400 px-6 text-base font-semibold text-black transition-colors hover:bg-cyan-300"
+          class="flex h-[46px] items-center gap-2 rounded-lg bg-cyan-400 px-5 text-base font-semibold text-black transition-colors hover:bg-cyan-300"
           type="submit"
         >
           <i data-lucide="search" class="h-4 w-4" stroke-width="2"></i>
@@ -60,26 +72,62 @@
       </div>
     </form>
 
-    <section class="overflow-hidden rounded-2xl border border-white/10 bg-[#111] shadow-sm">
-      <div class="grid grid-cols-[110px_110px_1fr_150px_150px] gap-4 border-b border-white/10 px-5 py-3 text-sm font-medium uppercase text-gray-500">
-        <span>ID</span>
-        <span>Status</span>
-        <span>Descrição</span>
-        <span>Criador</span>
-        <span>Atualizado</span>
-      </div>
-      <div class="divide-y divide-white/5">
-        {% for ticket in tickets %}
-          <article class="grid grid-cols-[110px_110px_1fr_150px_150px] gap-4 px-5 py-4 text-base text-gray-300">
-            <span class="font-mono text-cyan-300">#{{ "%04d"|format(ticket.id) }}</span>
-            <span>{{ ticket.status.value }}</span>
-            <span class="truncate">{{ ticket.description }}</span>
-            <span class="font-mono text-gray-400">{{ ticket.creator_user_id }}</span>
-            <span class="text-gray-500">{{ ticket.updated_at.strftime("%d/%m %H:%M") }}</span>
-          </article>
-        {% else %}
-          <p class="px-5 py-6 text-base text-gray-500">Nenhum ticket encontrado.</p>
-        {% endfor %}
+    <section class="overflow-x-auto">
+      <div class="min-w-[72rem]">
+        <div class="grid grid-cols-[110px_120px_130px_1fr_150px_160px_160px_170px] gap-4 border-b border-white/10 px-2 py-3 text-sm font-medium uppercase text-gray-500">
+          <span>ID</span>
+          <span>Status</span>
+          <span>Tipo</span>
+          <span>Descrição</span>
+          <span>Criador</span>
+          <span>Canal</span>
+          <span>Atualizado</span>
+          <span>Ações</span>
+        </div>
+        <div class="divide-y divide-white/5">
+          {% for ticket in tickets %}
+            <article class="grid grid-cols-[110px_120px_130px_1fr_150px_160px_160px_170px] gap-4 px-2 py-4 text-base text-gray-300">
+              <span class="font-mono text-cyan-300">#{{ "%04d"|format(ticket.id) }}</span>
+              <span class="{{ status_class(ticket.status.value) }}">{{ status_label(ticket.status.value) }}</span>
+              <span class="{{ type_class(ticket.ticket_type.value) }}">{{ ticket.ticket_type.value }}</span>
+              <span class="truncate" title="{{ ticket.description }}">{{ ticket.description }}</span>
+              <span class="font-mono text-gray-400">{{ ticket.creator_user_id }}</span>
+              <span>
+                {% if ticket.private_text_channel_id %}
+                  <a class="text-cyan-300 hover:text-cyan-200" href="https://discord.com/channels/{{ guild_id }}/{{ ticket.private_text_channel_id }}" target="_blank" rel="noreferrer">
+                    #{{ ticket.private_text_channel_id }}
+                  </a>
+                {% else %}
+                  <span class="text-gray-600">Sem canal</span>
+                {% endif %}
+              </span>
+              <span class="text-gray-500">{{ ticket.updated_at.strftime("%d/%m %H:%M") }}</span>
+              <span class="flex items-center gap-2">
+                <a
+                  class="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-gray-300 hover:border-cyan-400/50 hover:text-cyan-200"
+                  href="{{ url_for('tickets.list_tickets', guild_id=guild_id, q=ticket.id) }}"
+                  title="Ver detalhes"
+                >
+                  <i data-lucide="eye" class="h-4 w-4" stroke-width="1.5"></i>
+                </a>
+                {% if ticket.status.value != "closed" %}
+                  <form method="post" action="{{ url_for('tickets.close_ticket', ticket_id=ticket.id, guild_id=guild_id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button
+                      class="flex h-9 w-9 items-center justify-center rounded-lg border border-red-500/30 text-red-300 hover:border-red-400/60 hover:text-red-100"
+                      type="submit"
+                      title="Fechar diretamente"
+                    >
+                      <i data-lucide="x" class="h-4 w-4" stroke-width="2"></i>
+                    </button>
+                  </form>
+                {% endif %}
+              </span>
+            </article>
+          {% else %}
+            <p class="px-2 py-6 text-base text-gray-500">Nenhum ticket encontrado.</p>
+          {% endfor %}
+        </div>
       </div>
     </section>
   </main>
@@ -87,4 +135,16 @@
 
 {% macro field_class() -%}
   w-full rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-4 py-3 text-base text-gray-200 shadow-inner outline-none transition-all focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20
+{%- endmacro %}
+
+{% macro status_label(status) -%}
+  {%- if status == "open" -%}Aberto{%- elif status == "tribunal" -%}Em Tribunal{%- elif status == "closed" -%}Fechado{%- else -%}Aceito{%- endif -%}
+{%- endmacro %}
+
+{% macro status_class(status) -%}
+  inline-flex w-fit items-center rounded-md px-2 py-1 text-sm font-medium {% if status == "open" %}bg-emerald-500/10 text-emerald-300{% elif status == "tribunal" %}bg-amber-400/10 text-amber-300{% elif status == "closed" %}bg-gray-500/10 text-gray-400{% else %}bg-cyan-500/10 text-cyan-300{% endif %}
+{%- endmacro %}
+
+{% macro type_class(ticket_type) -%}
+  inline-flex w-fit items-center rounded-md px-2 py-1 text-sm font-medium {% if ticket_type == "report" %}bg-red-500/10 text-red-300{% else %}bg-blue-500/10 text-blue-300{% endif %}
 {%- endmacro %}

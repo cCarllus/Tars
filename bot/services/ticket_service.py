@@ -9,14 +9,17 @@ from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
 from bot.config import settings
 from bot.database.models.ticket_models import (
+    TicketActionLogModel,
     TicketEventModel,
     TicketEventType,
     TicketModel,
+    TicketProofModel,
     TicketStatus,
     TicketType,
     TribunalVoteChoice,
@@ -79,6 +82,38 @@ TICKET_SCHEMA = (
     """
     CREATE INDEX IF NOT EXISTS idx_ticket_events_ticket_created
     ON ticket_events (ticket_id, created_at)
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS ticket_proofs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ticket_id INTEGER NOT NULL,
+        actor_user_id INTEGER NOT NULL,
+        description TEXT NOT NULL,
+        links_json TEXT NOT NULL,
+        attachment_urls_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (ticket_id) REFERENCES tickets(id)
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_ticket_proofs_ticket_created
+    ON ticket_proofs (ticket_id, created_at)
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS ticket_action_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ticket_id INTEGER NOT NULL,
+        actor_user_id INTEGER,
+        action TEXT NOT NULL,
+        details TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (ticket_id) REFERENCES tickets(id)
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_ticket_action_logs_ticket_created
+    ON ticket_action_logs (ticket_id, created_at)
     """,
     """
     CREATE TABLE IF NOT EXISTS tribunal_votes (
@@ -211,6 +246,9 @@ class TicketService:
         *,
         guild_id: int,
         status: TicketStatus | None = None,
+        ticket_type: TicketType | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
         search: str | None = None,
         limit: int = 100,
     ) -> list[TicketModel]:
@@ -223,6 +261,18 @@ class TicketService:
         if status is not None:
             where.append("status = ?")
             params.append(status.value)
+
+        if ticket_type is not None:
+            where.append("ticket_type = ?")
+            params.append(ticket_type.value)
+
+        if created_after is not None:
+            where.append("created_at >= ?")
+            params.append(created_after.isoformat())
+
+        if created_before is not None:
+            where.append("created_at <= ?")
+            params.append(created_before.isoformat())
 
         if search:
             where.append("(description LIKE ? OR CAST(id AS TEXT) LIKE ?)")
@@ -388,16 +438,225 @@ class TicketService:
         *,
         ticket_id: int,
         actor_user_id: int,
-        proof: str,
-    ) -> None:
-        """Add an auditable proof note to a ticket."""
+        description: str,
+        links: tuple[str, ...] = (),
+        attachment_urls: tuple[str, ...] = (),
+    ) -> TicketProofModel:
+        """Persist proof submitted by a ticket participant.
 
+        Args:
+            ticket_id: Ticket receiving the proof.
+            actor_user_id: Discord user ID that submitted the proof.
+            description: Human-readable proof context.
+            links: External links supplied by the user.
+            attachment_urls: Discord attachment URLs copied from the interaction.
+
+        Returns:
+            The persisted proof record.
+        """
+
+        await self.initialize()
+        created_at = _utc_now().isoformat()
+        proof_id = await asyncio.to_thread(
+            self._insert_proof_sync,
+            ticket_id,
+            actor_user_id,
+            description,
+            links,
+            attachment_urls,
+            created_at,
+        )
         await self.record_event(
             ticket_id=ticket_id,
             actor_user_id=actor_user_id,
             event_type=TicketEventType.PROOF_ADDED,
-            payload={"proof": proof},
+            payload={
+                "proof_id": proof_id,
+                "description": description,
+                "links": list(links),
+                "attachment_urls": list(attachment_urls),
+            },
         )
+        proof = await self.get_proof(proof_id)
+        if proof is None:
+            msg = f"Proof {proof_id} was not persisted"
+            raise RuntimeError(msg)
+        return proof
+
+    async def get_proof(self, proof_id: int) -> TicketProofModel | None:
+        """Return one proof record by ID."""
+
+        await self.initialize()
+        row = await asyncio.to_thread(
+            self._fetch_one,
+            "SELECT * FROM ticket_proofs WHERE id = ?",
+            (proof_id,),
+        )
+        return _proof_from_row(row) if row else None
+
+    async def list_proofs(self, ticket_id: int) -> list[TicketProofModel]:
+        """Return all proofs submitted for a ticket."""
+
+        await self.initialize()
+        rows = await asyncio.to_thread(
+            self._fetch_all,
+            """
+            SELECT *
+            FROM ticket_proofs
+            WHERE ticket_id = ?
+            ORDER BY id ASC
+            """,
+            (ticket_id,),
+        )
+        return [_proof_from_row(row) for row in rows]
+
+    async def log_action(
+        self,
+        *,
+        ticket_id: int,
+        actor_user_id: int | None,
+        action: str,
+        details: str,
+        payload: dict[str, Any] | None = None,
+    ) -> TicketActionLogModel:
+        """Persist an important conductor or staff action.
+
+        Args:
+            ticket_id: Ticket receiving the log.
+            actor_user_id: Discord user ID responsible for the action, if known.
+            action: Stable action key for filtering and audits.
+            details: User-readable action summary in PT-BR.
+            payload: Optional structured context.
+
+        Returns:
+            The persisted action log record.
+        """
+
+        await self.initialize()
+        created_at = _utc_now().isoformat()
+        action_log_id = await asyncio.to_thread(
+            self._insert_action_log_sync,
+            ticket_id,
+            actor_user_id,
+            action,
+            details,
+            payload or {},
+            created_at,
+        )
+        await self.record_event(
+            ticket_id=ticket_id,
+            actor_user_id=actor_user_id,
+            event_type=TicketEventType.ACTION_LOGGED,
+            payload={
+                "action_log_id": action_log_id,
+                "action": action,
+                "details": details,
+            },
+        )
+        action_log = await self.get_action_log(action_log_id)
+        if action_log is None:
+            msg = f"Action log {action_log_id} was not persisted"
+            raise RuntimeError(msg)
+        return action_log
+
+    async def get_action_log(self, action_log_id: int) -> TicketActionLogModel | None:
+        """Return one action log by ID."""
+
+        await self.initialize()
+        row = await asyncio.to_thread(
+            self._fetch_one,
+            "SELECT * FROM ticket_action_logs WHERE id = ?",
+            (action_log_id,),
+        )
+        return _action_log_from_row(row) if row else None
+
+    async def list_action_logs(self, ticket_id: int) -> list[TicketActionLogModel]:
+        """Return conductor/staff action logs for one ticket."""
+
+        await self.initialize()
+        rows = await asyncio.to_thread(
+            self._fetch_all,
+            """
+            SELECT *
+            FROM ticket_action_logs
+            WHERE ticket_id = ?
+            ORDER BY id ASC
+            """,
+            (ticket_id,),
+        )
+        return [_action_log_from_row(row) for row in rows]
+
+    async def count_recent_user_tickets(
+        self,
+        *,
+        guild_id: int,
+        creator_user_id: int,
+        window_seconds: int,
+    ) -> int:
+        """Count tickets opened by one user inside a sliding time window."""
+
+        await self.initialize()
+        cutoff = _utc_now() - timedelta(seconds=window_seconds)
+        row = await asyncio.to_thread(
+            self._fetch_one,
+            """
+            SELECT COUNT(*) AS total
+            FROM tickets
+            WHERE guild_id = ?
+              AND creator_user_id = ?
+              AND created_at >= ?
+            """,
+            (guild_id, creator_user_id, cutoff.isoformat()),
+        )
+        return int(row["total"]) if row is not None else 0
+
+    async def find_recent_similar_ticket(
+        self,
+        *,
+        guild_id: int,
+        creator_user_id: int,
+        ticket_type: TicketType,
+        description: str,
+        window_seconds: int,
+        similarity_threshold: float = 0.9,
+    ) -> TicketModel | None:
+        """Return a recent ticket with a highly similar description.
+
+        The check intentionally stays simple and explainable: it compares a
+        normalized description against recent tickets from the same user and
+        type using exact containment plus a SequenceMatcher ratio.
+        """
+
+        await self.initialize()
+        cutoff = _utc_now() - timedelta(seconds=window_seconds)
+        rows = await asyncio.to_thread(
+            self._fetch_all,
+            """
+            SELECT *
+            FROM tickets
+            WHERE guild_id = ?
+              AND creator_user_id = ?
+              AND ticket_type = ?
+              AND created_at >= ?
+            ORDER BY id DESC
+            LIMIT 20
+            """,
+            (guild_id, creator_user_id, ticket_type.value, cutoff.isoformat()),
+        )
+        normalized = _normalize_for_similarity(description)
+        if not normalized:
+            return None
+
+        for row in rows:
+            candidate = _ticket_from_row(row)
+            candidate_description = _normalize_for_similarity(candidate.description)
+            if _descriptions_are_similar(
+                normalized,
+                candidate_description,
+                similarity_threshold,
+            ):
+                return candidate
+        return None
 
     async def escalate_to_tribunal(
         self,
@@ -796,6 +1055,80 @@ class TicketService:
             )
             connection.commit()
 
+    def _insert_proof_sync(
+        self,
+        ticket_id: int,
+        actor_user_id: int,
+        description: str,
+        links: tuple[str, ...],
+        attachment_urls: tuple[str, ...],
+        created_at: str,
+    ) -> int:
+        with sqlite3.connect(self.database_path) as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO ticket_proofs (
+                    ticket_id,
+                    actor_user_id,
+                    description,
+                    links_json,
+                    attachment_urls_json,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    ticket_id,
+                    actor_user_id,
+                    description,
+                    json.dumps(list(links), ensure_ascii=False),
+                    json.dumps(list(attachment_urls), ensure_ascii=False),
+                    created_at,
+                ),
+            )
+            connection.commit()
+            if cursor.lastrowid is None:
+                msg = "SQLite did not return a proof ID"
+                raise RuntimeError(msg)
+            return cursor.lastrowid
+
+    def _insert_action_log_sync(
+        self,
+        ticket_id: int,
+        actor_user_id: int | None,
+        action: str,
+        details: str,
+        payload: dict[str, Any],
+        created_at: str,
+    ) -> int:
+        with sqlite3.connect(self.database_path) as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO ticket_action_logs (
+                    ticket_id,
+                    actor_user_id,
+                    action,
+                    details,
+                    payload_json,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    ticket_id,
+                    actor_user_id,
+                    action,
+                    details,
+                    json.dumps(payload, ensure_ascii=False),
+                    created_at,
+                ),
+            )
+            connection.commit()
+            if cursor.lastrowid is None:
+                msg = "SQLite did not return an action log ID"
+                raise RuntimeError(msg)
+            return cursor.lastrowid
+
     def _execute(self, query: str, params: Iterable[Any]) -> None:
         with sqlite3.connect(self.database_path) as connection:
             connection.execute(query, tuple(params))
@@ -998,6 +1331,32 @@ def _event_from_row(row: sqlite3.Row) -> TicketEventModel:
     )
 
 
+def _proof_from_row(row: sqlite3.Row) -> TicketProofModel:
+    return TicketProofModel(
+        id=int(row["id"]),
+        ticket_id=int(row["ticket_id"]),
+        actor_user_id=int(row["actor_user_id"]),
+        description=str(row["description"]),
+        links=tuple(str(item) for item in json.loads(str(row["links_json"]))),
+        attachment_urls=tuple(
+            str(item) for item in json.loads(str(row["attachment_urls_json"]))
+        ),
+        created_at=datetime.fromisoformat(str(row["created_at"])),
+    )
+
+
+def _action_log_from_row(row: sqlite3.Row) -> TicketActionLogModel:
+    return TicketActionLogModel(
+        id=int(row["id"]),
+        ticket_id=int(row["ticket_id"]),
+        actor_user_id=_optional_row_int(row["actor_user_id"]),
+        action=str(row["action"]),
+        details=str(row["details"]),
+        payload=json.loads(str(row["payload_json"])),
+        created_at=datetime.fromisoformat(str(row["created_at"])),
+    )
+
+
 def _vote_from_row(row: sqlite3.Row) -> VoteModel:
     return VoteModel(
         id=int(row["id"]),
@@ -1017,6 +1376,26 @@ def _optional_row_int(value: object) -> int | None:
 
 def _utc_now() -> datetime:
     return datetime.now(tz=timezone.utc)  # noqa: UP017
+
+
+def _normalize_for_similarity(value: str) -> str:
+    return " ".join(value.casefold().strip().split())
+
+
+def _descriptions_are_similar(
+    description: str,
+    candidate: str,
+    threshold: float,
+) -> bool:
+    if not candidate:
+        return False
+    if description == candidate:
+        return True
+    if len(description) >= 12 and description in candidate:
+        return True
+    if len(candidate) >= 12 and candidate in description:
+        return True
+    return SequenceMatcher(a=description, b=candidate).ratio() >= threshold
 
 
 ticket_service_singleton = TicketService()

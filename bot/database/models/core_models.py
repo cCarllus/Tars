@@ -196,6 +196,10 @@ class TicketConfigModel:
     archive_after_hours: int = 24
     tribunal_majority_votes: int = 3
     anonymous_reports_enabled: bool = False
+    rate_limit_ticket_count: int = 2
+    rate_limit_window_seconds: int = 3600
+    transcript_channel_id: int | None = None
+    dm_notifications_enabled: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the config for JSON persistence."""
@@ -210,6 +214,10 @@ class TicketConfigModel:
             "archive_after_hours": self.archive_after_hours,
             "tribunal_majority_votes": self.tribunal_majority_votes,
             "anonymous_reports_enabled": self.anonymous_reports_enabled,
+            "rate_limit_ticket_count": self.rate_limit_ticket_count,
+            "rate_limit_window_seconds": self.rate_limit_window_seconds,
+            "transcript_channel_id": self.transcript_channel_id,
+            "dm_notifications_enabled": self.dm_notifications_enabled,
         }
 
     @classmethod
@@ -233,6 +241,18 @@ class TicketConfigModel:
             ),
             anonymous_reports_enabled=bool(
                 payload.get("anonymous_reports_enabled", False),
+            ),
+            rate_limit_ticket_count=max(
+                1,
+                int(payload.get("rate_limit_ticket_count", 2)),
+            ),
+            rate_limit_window_seconds=max(
+                60,
+                int(payload.get("rate_limit_window_seconds", 3600)),
+            ),
+            transcript_channel_id=_optional_int(payload.get("transcript_channel_id")),
+            dm_notifications_enabled=bool(
+                payload.get("dm_notifications_enabled", True),
             ),
         )
 

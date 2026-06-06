@@ -7,10 +7,11 @@ from typing import Protocol, runtime_checkable
 
 import discord
 
-from bot.services.ticket_service import TicketService, ticket_service_singleton
-from bot.utils.embed import error_embed, success_embed
+from bot.modals.proof_modal import TicketProofModal
+from bot.utils.embed import error_embed
 
 USER_ID_PATTERN = re.compile(r"\d{15,25}")
+__all__ = ["TicketParticipantModal", "TicketProofModal"]
 
 
 @runtime_checkable
@@ -32,43 +33,6 @@ class TicketParticipantHandler(Protocol):
         user_id: int,
     ) -> None:
         """Remove a user from a ticket."""
-
-
-class TicketProofModal(discord.ui.Modal):
-    """Collect proof or extra context for a ticket."""
-
-    proof = discord.ui.TextInput[discord.ui.Modal](
-        label="Provas ou contexto",
-        style=discord.TextStyle.long,
-        min_length=3,
-        max_length=1500,
-        required=True,
-    )
-
-    def __init__(
-        self,
-        *,
-        ticket_id: int,
-        service: TicketService | None = None,
-    ) -> None:
-        """Initialize the proof modal."""
-
-        super().__init__(title=f"Adicionar provas ao Ticket #{ticket_id:04d}")
-        self.ticket_id = ticket_id
-        self.service = service or ticket_service_singleton
-
-    async def on_submit(self, interaction: discord.Interaction) -> None:
-        """Persist the submitted proof and acknowledge the user."""
-
-        await self.service.add_proof(
-            ticket_id=self.ticket_id,
-            actor_user_id=interaction.user.id,
-            proof=str(self.proof.value),
-        )
-        await interaction.response.send_message(
-            embed=success_embed("Provas adicionadas ao histórico do ticket."),
-            ephemeral=True,
-        )
 
 
 class TicketParticipantModal(discord.ui.Modal):

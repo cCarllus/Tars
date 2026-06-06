@@ -37,6 +37,7 @@ class TicketEventType(StrEnum):
     ESCALATED = "escalated"
     VOTE_CAST = "vote_cast"
     DECISION_REACHED = "decision_reached"
+    ACTION_LOGGED = "action_logged"
     CLOSED = "closed"
 
 
@@ -87,6 +88,32 @@ class TicketEventModel:
     ticket_id: int
     actor_user_id: int | None
     event_type: TicketEventType
+    payload: dict[str, Any]
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class TicketProofModel:
+    """Persisted proof submitted by a ticket participant."""
+
+    id: int
+    ticket_id: int
+    actor_user_id: int
+    description: str
+    links: tuple[str, ...]
+    attachment_urls: tuple[str, ...]
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class TicketActionLogModel:
+    """Persisted conductor/staff action for a ticket."""
+
+    id: int
+    ticket_id: int
+    actor_user_id: int | None
+    action: str
+    details: str
     payload: dict[str, Any]
     created_at: datetime
 

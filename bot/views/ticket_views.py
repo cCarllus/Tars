@@ -7,7 +7,7 @@ from typing import Protocol, runtime_checkable
 import discord
 
 from bot.database.models.ticket_models import TribunalVoteChoice
-from bot.modals.ticket_modals import TicketProofModal
+from bot.modals.proof_modal import TicketProofModal
 from bot.utils.embed import error_embed
 
 

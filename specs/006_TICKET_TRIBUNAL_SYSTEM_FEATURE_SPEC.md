@@ -114,3 +114,44 @@ O servidor possui alto volume de interações zoeira/humor negro. É necessário
 - Integração futura com Auto-Mod (auto-criar ticket em casos graves).
 - Manter experiência premium e visual consistente com o TARS (embeds bonitos, cores temáticas).
 - Preparar para futuro sistema de "Prioridade" em tickets (grave, média, baixa).
+
+## Incremento 2026-06-06 — UX, Segurança, Auditoria e Dashboard
+
+**Status:** Done
+
+### Funcionalidades adicionadas
+
+- Embeds padronizados por `create_ticket_embed()` com tema por tipo:
+  - `report`: vermelho
+  - `support`: azul
+  - `tribunal`: dourado
+- Footer, timestamp, thumbnail e campos base padronizados para embeds de tickets.
+- Modal dedicado de provas com descrição e links um por linha.
+- Registro automático de mensagens com anexos no canal privado como provas do ticket.
+- Persistência dedicada de provas em `ticket_proofs`.
+- Transcript automático em `.txt` ao fechar tickets com histórico do canal e provas registradas.
+- Envio do transcript para canal configurado de transcripts, com fallback para logs/sistema.
+- Notificações por DM ao criador quando o ticket é aceito e quando é fechado.
+- Rate limit configurável pela Dashboard:
+  - quantidade máxima por usuário
+  - janela de tempo em minutos
+- Anti-spam por similaridade simples de motivo dentro da janela configurada.
+- Persistência dedicada de ações importantes em `ticket_action_logs`.
+- Dashboard `/dashboard/tickets` com:
+  - filtros por busca, tipo, status e data
+  - status com cores
+  - coluna de link do canal
+  - ação rápida para fechar diretamente
+- Configurações novas na Dashboard:
+  - canal de transcripts
+  - notificações DM
+  - limite de tickets por usuário
+  - janela do limite
+
+### Testes adicionados/atualizados
+
+- Persistência de provas.
+- Persistência de action logs.
+- Consulta de rate limit e anti-spam.
+- Geração básica de transcript.
+- Fechamento direto pela Dashboard.

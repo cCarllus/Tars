@@ -80,6 +80,10 @@ def test_dashboard_saves_config_through_core_service(
     assert loaded.tickets.admin_role_ids == ()
     assert loaded.tickets.create_voice_channel is False
     assert loaded.tickets.tribunal_majority_votes == 2
+    assert loaded.tickets.rate_limit_ticket_count == 2
+    assert loaded.tickets.rate_limit_window_seconds == 3600
+    assert loaded.tickets.transcript_channel_id == 33
+    assert loaded.tickets.dm_notifications_enabled is True
     assert audit_events[0]["event_type"] == "dashboard_config_updated"
 
 
@@ -146,6 +150,19 @@ def test_dashboard_lists_tickets_with_filters(
     assert response.status_code == 200
     assert f"#{ticket.id:04d}".encode() in response.data
     assert b"den\xc3\xbancia com provas" in response.data
+    assert b"report" in response.data
+
+    close_response = client.post(
+        f"/dashboard/tickets/{ticket.id}/close?guild_id=123",
+        data={"csrf_token": "csrf-token"},
+    )
+    closed = asyncio.run(ticket_service.get_ticket(ticket.id))
+    action_logs = asyncio.run(ticket_service.list_action_logs(ticket.id))
+
+    assert close_response.status_code == 302
+    assert closed is not None
+    assert closed.close_reason == "Fechado diretamente pela Dashboard."
+    assert action_logs[0].action == "ticket_closed_dashboard"
 
 
 def _configure_dashboard_settings(monkeypatch: MonkeyPatch) -> None:
@@ -189,9 +206,13 @@ def _dashboard_payload() -> dict[str, str]:
         "leveling_voice_xp_per_minute": "8",
         "leveling_level_xp_factor": "200",
         "tickets_triage_channel_id": "30",
+        "tickets_transcript_channel_id": "33",
         "tickets_staff_role_ids": "31\n32\n31",
         "tickets_ticket_expiration_hours": "72",
         "tickets_archive_after_hours": "24",
         "tickets_tribunal_majority_votes": "2",
         "tickets_anonymous_reports_enabled": "1",
+        "tickets_dm_notifications_enabled": "1",
+        "tickets_rate_limit_ticket_count": "2",
+        "tickets_rate_limit_window_minutes": "60",
     }

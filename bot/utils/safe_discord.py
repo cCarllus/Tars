@@ -26,6 +26,7 @@ async def safe_send_message(
     content: str | None = None,
     embed: discord.Embed | None = None,
     view: discord.ui.View | None = None,
+    file: discord.File | None = None,
     reason: str = "send_message",
 ) -> discord.Message:
     """Send a message with retry, timeout and latency logging."""
@@ -37,6 +38,8 @@ async def safe_send_message(
         kwargs["embed"] = embed
     if view is not None:
         kwargs["view"] = view
+    if file is not None:
+        kwargs["file"] = file
 
     return await _run_discord_operation(
         action=reason,
@@ -213,6 +216,7 @@ async def safe_send_dm(
     content: str | None = None,
     embed: discord.Embed | None = None,
     view: discord.ui.View | None = None,
+    file: discord.File | None = None,
 ) -> discord.Message:
     """Send a direct message with retry, timeout and latency logging."""
 
@@ -223,6 +227,8 @@ async def safe_send_dm(
         kwargs["embed"] = embed
     if view is not None:
         kwargs["view"] = view
+    if file is not None:
+        kwargs["file"] = file
 
     return await _run_discord_operation(
         action="send_dm",
