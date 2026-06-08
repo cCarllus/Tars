@@ -14,6 +14,7 @@ os.environ.setdefault("DISCORD_TOKEN", "test-token")
 from bot.database.models.core_models import (
     AutoModConfigModel,
     DashboardConfigModel,
+    LevelingConfigModel,
     LogConfigModel,
     LogDetailLevel,
 )
@@ -26,7 +27,7 @@ from bot.services.leveling_service import LevelingService
 
 
 def test_core_config_service_restricts_dashboard_updates(tmp_path: Path) -> None:
-    """Ensure only the configured owner can mutate Dashboard config."""
+    """Ensure only owner or configured staff can mutate Dashboard config."""
 
     service = CoreConfigService(tmp_path / "tars.sqlite3")
     config = DashboardConfigModel(
@@ -46,6 +47,31 @@ def test_core_config_service_restricts_dashboard_updates(tmp_path: Path) -> None
     assert loaded.logs.detail_level == LogDetailLevel.DETAILED
     assert audit_events[0]["event_type"] == "dashboard_config_updated"
     assert audit_events[0]["detail_level"] == 3
+
+    staff_config = DashboardConfigModel(
+        guild_id=123,
+        owner_user_id=42,
+        logs=LogConfigModel(channel_id=555, detail_level=LogDetailLevel.BASIC),
+        leveling=LevelingConfigModel(xp_staff_role_ids=(987,)),
+    )
+    asyncio.run(service.save_config_from_dashboard(staff_config, actor_user_id=42))
+
+    staff_update = DashboardConfigModel(
+        guild_id=123,
+        owner_user_id=42,
+        logs=LogConfigModel(channel_id=556, detail_level=LogDetailLevel.NORMAL),
+        leveling=LevelingConfigModel(xp_staff_role_ids=(987,)),
+    )
+    asyncio.run(
+        service.save_config_from_dashboard(
+            staff_update,
+            actor_user_id=7,
+            actor_role_ids=(987,),
+        ),
+    )
+    staff_loaded = asyncio.run(service.get_config(123))
+
+    assert staff_loaded.logs.channel_id == 556
 
 
 def test_leveling_service_applies_message_cooldown_and_leaderboard(
@@ -83,7 +109,7 @@ def test_leveling_service_applies_message_cooldown_and_leaderboard(
     assert first.xp == 15
     assert second.xp == 15
     assert third.xp == 30
-    assert [record.user_id for record in leaderboard] == [1, 2]
+    assert [record.user_id for record in leaderboard] == [2, 1]
 
 
 def test_auto_mod_evaluates_blocked_words_and_allows_links() -> None:

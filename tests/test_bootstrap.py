@@ -23,9 +23,9 @@ def test_discover_cogs_starts_empty(monkeypatch: MonkeyPatch) -> None:
     assert cogs == [
         "bot.cogs.core.audit_log",
         "bot.cogs.core.auto_mod",
-        "bot.cogs.core.leveling",
         "bot.cogs.core.welcome_leave",
         "bot.cogs.games.promo_tracker",
+        "bot.cogs.levels.levels_cog",
         "bot.cogs.tickets.ticket_cog",
         "bot.cogs.voice.private_voice_calls",
     ]

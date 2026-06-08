@@ -29,6 +29,7 @@ from dashboard.forms import DashboardFormError, build_previews, parse_dashboard_
 from dashboard.security import (
     SESSION_GUILD_ID_KEY,
     current_user_id,
+    current_user_role_ids,
     login_required,
     validate_csrf,
 )
@@ -84,6 +85,7 @@ def save_dashboard() -> ResponseReturnValue:
             _config_service().save_config_from_dashboard(
                 config,
                 actor_user_id=actor_user_id,
+                actor_role_ids=current_user_role_ids(),
             ),
         )
     except DashboardFormError as exc:

@@ -7,8 +7,12 @@ from bot.database.models.core_models import (
     LogConfigModel,
     LogDetailLevel,
     TicketConfigModel,
-    UserLevelModel,
     WelcomeConfigModel,
+)
+from bot.database.models.level_models import (
+    LevelRewardModel,
+    UserLevelModel,
+    XPGainResult,
 )
 from bot.database.models.ticket_models import (
     TicketEventModel,
@@ -26,6 +30,7 @@ __all__ = [
     "DashboardConfigModel",
     "LogConfigModel",
     "LogDetailLevel",
+    "LevelRewardModel",
     "TicketConfigModel",
     "TicketEventModel",
     "TicketEventType",
@@ -36,4 +41,5 @@ __all__ = [
     "UserLevelModel",
     "VoteModel",
     "WelcomeConfigModel",
+    "XPGainResult",
 ]

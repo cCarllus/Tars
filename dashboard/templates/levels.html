@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}Levels | TARS Dashboard{% endblock %}
+
+{% block content %}
+  <header class="sticky top-0 z-50 border-b border-white/10 bg-[#0A0A0A]/80 backdrop-blur-md">
+    <div class="mx-auto flex max-w-[90rem] items-center justify-between gap-6 px-6 py-4">
+      <div class="flex items-center gap-4">
+        <a class="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500" href="{{ url_for('config.dashboard', guild_id=guild_id) }}" aria-label="TARS Dashboard">
+          <i data-lucide="bot" class="h-6 w-6 text-black" stroke-width="1.8"></i>
+        </a>
+        <div>
+          <h1 class="text-2xl font-semibold leading-tight tracking-tight text-white">Levels</h1>
+          <p class="text-base text-gray-500">XP, leaderboard e recompensas por nível</p>
+        </div>
+      </div>
+      <a class="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-gray-300 transition-colors hover:border-white/20 hover:text-white" href="{{ url_for('config.dashboard', guild_id=guild_id) }}#xp">
+        <i data-lucide="settings" class="h-4 w-4" stroke-width="1.5"></i>
+        Configurar XP
+      </a>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-[90rem] px-6 py-8">
+    <section class="rounded-2xl border border-white/10 bg-[#111] p-5 shadow-sm">
+      {{ panel_title("megaphone", "Anúncios de Level Up") }}
+      <form class="grid grid-cols-1 gap-5 xl:grid-cols-3" method="post" action="{{ url_for('levels.save_level_settings', guild_id=guild_id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="block">
+          <span class="mb-2 block text-base text-gray-400">Canal de Level Up</span>
+          <select class="{{ field_class() }}" name="leveling_levelup_channel_id">
+            <option value="" {% if not config.leveling.levelup_channel_id %}selected{% endif %}>Fallback automático</option>
+            {% for channel_id, label in channel_options %}
+              <option value="{{ channel_id }}" {% if config.leveling.levelup_channel_id == channel_id %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        {{ toggle("leveling_levelup_enabled", "Anúncio ativo", config.leveling.levelup_enabled) }}
+        {{ toggle("leveling_levelup_mention", "Mencionar usuário", config.leveling.levelup_mention) }}
+        <div class="xl:col-span-3">
+          {{ textarea("leveling_levelup_message", "Mensagem customizada", config.leveling.levelup_message, 3) }}
+        </div>
+        <div class="flex justify-end xl:col-span-3">
+          <button class="flex items-center gap-2 rounded-lg bg-cyan-400 px-5 py-3 font-semibold text-black" type="submit">
+            <i data-lucide="save" class="h-4 w-4" stroke-width="2"></i>
+            Salvar anúncios
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <section class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+      {{ stat_card("Usuários", stats.members_count) }}
+      {{ stat_card("XP total", stats.total_xp) }}
+      {{ stat_card("Mensagens", stats.messages_count) }}
+      {{ stat_card("Minutos em voz", stats.voice_minutes) }}
+    </section>
+
+    <section class="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-3">
+      <div class="rounded-2xl border border-white/10 bg-[#111] p-5 shadow-sm">
+        {{ panel_title("trophy", "Global") }}
+        {{ leaderboard_list(leaderboard, false) }}
+      </div>
+
+      <div class="rounded-2xl border border-white/10 bg-[#111] p-5 shadow-sm">
+        {{ panel_title("calendar-days", "Semanal") }}
+        {{ leaderboard_list(weekly_leaderboard, true) }}
+      </div>
+
+      <div class="rounded-2xl border border-white/10 bg-[#111] p-5 shadow-sm">
+        {{ panel_title("badge", "Cargos por nível") }}
+        <form class="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2" method="post" action="{{ url_for('levels.save_reward', guild_id=guild_id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input class="{{ field_class() }}" name="level" type="number" min="0" placeholder="Nível" required>
+          <input class="{{ field_class() }}" name="role_id" inputmode="numeric" placeholder="ID do cargo" required>
+          <button class="flex items-center justify-center gap-2 rounded-lg bg-cyan-400 px-4 py-3 font-semibold text-black sm:col-span-2" type="submit">
+            <i data-lucide="plus" class="h-4 w-4" stroke-width="2"></i>
+            Adicionar
+          </button>
+        </form>
+        <div class="space-y-2">
+          {% for reward in rewards %}
+            <div class="flex items-center justify-between gap-3 rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] p-3">
+              <p class="text-sm text-gray-300">Nível <strong class="text-white">{{ reward.level }}</strong> → <span class="font-mono">{{ reward.role_id }}</span></p>
+              <form method="post" action="{{ url_for('levels.save_reward', guild_id=guild_id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="level" value="{{ reward.level }}">
+                <input type="hidden" name="role_id" value="{{ reward.role_id }}">
+                <button class="flex h-8 w-8 items-center justify-center rounded-md border border-red-500/30 text-red-300 hover:bg-red-950/40" type="submit" aria-label="Remover recompensa">
+                  <i data-lucide="trash-2" class="h-4 w-4" stroke-width="1.5"></i>
+                </button>
+              </form>
+            </div>
+          {% else %}
+            <p class="rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] p-3 text-sm text-gray-500">Nenhuma recompensa configurada.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+  </main>
+{% endblock %}
+
+{% macro stat_card(label, value) -%}
+  <div class="rounded-2xl border border-white/10 bg-[#111] p-5 shadow-sm">
+    <p class="text-sm text-gray-500">{{ label }}</p>
+    <p class="mt-2 text-3xl font-semibold text-white">{{ value }}</p>
+  </div>
+{%- endmacro %}
+
+{% macro panel_title(icon, label) -%}
+  <div class="mb-5 flex items-center gap-2">
+    <i data-lucide="{{ icon }}" class="h-4 w-4 text-cyan-400" stroke-width="1.5"></i>
+    <h2 class="text-lg font-medium tracking-tight text-white">{{ label }}</h2>
+  </div>
+{%- endmacro %}
+
+{% macro leaderboard_list(records, weekly) -%}
+  <div class="space-y-2">
+    {% for record in records %}
+      <div class="rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] p-3">
+        <div class="flex items-center justify-between gap-3">
+          <p class="font-mono text-sm text-gray-400">#{{ loop.index }} • {{ record.user_id }}</p>
+          <p class="text-sm text-cyan-300">{{ record.weekly_xp if weekly else record.xp }} XP</p>
+        </div>
+        <p class="mt-1 text-sm text-gray-300">Nível {{ record.level }}</p>
+      </div>
+    {% else %}
+      <p class="rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] p-3 text-sm text-gray-500">Sem XP registrado.</p>
+    {% endfor %}
+  </div>
+{%- endmacro %}
+
+{% macro field_class() -%}
+  w-full rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-4 py-3 text-base text-gray-200 shadow-inner outline-none transition-all focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20
+{%- endmacro %}
+
+{% macro textarea(name, label, value, rows=3) -%}
+  <label class="block">
+    <span class="mb-2 block text-base text-gray-400">{{ label }}</span>
+    <textarea class="{{ field_class() }} min-h-24 resize-y whitespace-pre-wrap" name="{{ name }}" rows="{{ rows }}">{{ value }}</textarea>
+  </label>
+{%- endmacro %}
+
+{% macro toggle(name, label, checked) -%}
+  <label class="flex h-[50px] cursor-pointer items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-4">
+    <span class="text-base text-gray-300">{{ label }}</span>
+    <span class="relative flex items-center">
+      <input name="{{ name }}" type="hidden" value="0">
+      <input
+        class="peer h-5 w-5 cursor-pointer appearance-none rounded border border-[#444] bg-white/5 transition-all checked:border-cyan-500 checked:bg-cyan-500"
+        name="{{ name }}"
+        type="checkbox"
+        value="1"
+        {% if checked %}checked{% endif %}
+      >
+      <i data-lucide="check" class="pointer-events-none absolute inset-0 m-auto h-3.5 w-3.5 text-black opacity-0 peer-checked:opacity-100" stroke-width="3"></i>
+    </span>
+  </label>
+{%- endmacro %}

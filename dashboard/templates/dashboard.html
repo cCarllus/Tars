@@ -26,6 +26,13 @@
           <i data-lucide="ticket" class="h-4 w-4" stroke-width="1.5"></i>
           Tickets
         </a>
+        <a
+          class="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-gray-300 transition-colors hover:border-white/20 hover:text-white"
+          href="{{ url_for('levels.levels_dashboard', guild_id=config.guild_id or tars_guild_id) }}"
+        >
+          <i data-lucide="zap" class="h-4 w-4" stroke-width="1.5"></i>
+          Levels
+        </a>
         <span class="hidden items-center gap-2 sm:flex">
           <i data-lucide="clock" class="h-4 w-4" stroke-width="1.5"></i>
           Atualizado em {{ config.updated_at.strftime("%d/%m/%Y %H:%M") }}
@@ -155,12 +162,41 @@
               <div class="md:w-1/2">
                 {{ toggle("leveling_enabled", "Ativo", config.leveling.enabled) }}
               </div>
-              <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-                {{ number_input("leveling_message_xp", "XP por mensagem", config.leveling.message_xp) }}
-                {{ number_input("leveling_voice_xp_per_minute", "XP por minuto em voz", config.leveling.voice_xp_per_minute) }}
-                {{ number_input("leveling_message_cooldown_seconds", "Cooldown (segundos)", config.leveling.message_cooldown_seconds) }}
-                {{ number_input("leveling_level_xp_factor", "XP por nível", config.leveling.level_xp_factor) }}
+              <div class="rounded-xl border border-purple-500/20 bg-purple-950/10 p-4">
+                <div class="mb-4 flex items-center gap-2">
+                  <i data-lucide="lock-keyhole" class="h-4 w-4 text-purple-300" stroke-width="1.5"></i>
+                  <h3 class="text-base font-medium text-white">Permissões de XP</h3>
+                </div>
+                <div class="grid grid-cols-1 gap-6 md:grid-cols-3">
+                  {{ text_input("leveling_xp_owner_user_id", "Owner do XP", config.leveling.xp_owner_user_id, true) }}
+                  {{ number_input("leveling_staff_max_set_level", "Nível máx. staff", config.leveling.staff_max_set_level) }}
+                  {{ number_input("leveling_staff_max_xp_per_command", "XP máx. staff", config.leveling.staff_max_xp_per_command) }}
+                </div>
+                <div class="mt-6">
+                  {{ textarea("leveling_xp_staff_role_ids", "Roles que podem dar XP", config.leveling.xp_staff_role_ids|join("\n"), 3) }}
+                </div>
               </div>
+              <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                {{ number_input("leveling_message_xp_min", "XP mín. por mensagem", config.leveling.message_xp_min) }}
+                {{ number_input("leveling_message_xp_max", "XP máx. por mensagem", config.leveling.message_xp_max) }}
+                {{ number_input("leveling_voice_xp_min_per_minute", "XP mín. por minuto em voz", config.leveling.voice_xp_min_per_minute) }}
+                {{ number_input("leveling_voice_xp_max_per_minute", "XP máx. por minuto em voz", config.leveling.voice_xp_max_per_minute) }}
+                {{ number_input("leveling_message_cooldown_seconds", "Cooldown (segundos)", config.leveling.message_cooldown_seconds) }}
+                {{ decimal_input("leveling_voice_group_bonus_multiplier", "Bônus voz 2+ pessoas", config.leveling.voice_group_bonus_multiplier) }}
+                {{ number_input("leveling_daily_base_xp", "Daily XP base", config.leveling.daily_base_xp) }}
+                {{ number_input("leveling_daily_streak_bonus_xp", "Bônus por streak", config.leveling.daily_streak_bonus_xp) }}
+                {{ number_input("leveling_daily_max_streak", "Streak máximo", config.leveling.daily_max_streak) }}
+                {{ number_input("leveling_level_formula_quadratic", "Fórmula: level²", config.leveling.level_formula_quadratic) }}
+                {{ number_input("leveling_level_formula_linear", "Fórmula: level", config.leveling.level_formula_linear) }}
+                {{ number_input("leveling_level_formula_constant", "Fórmula: constante", config.leveling.level_formula_constant) }}
+              </div>
+              {{ textarea("leveling_ignored_channel_ids", "Canais ignorados", config.leveling.ignored_channel_ids|join("\n"), 3) }}
+              <div class="grid grid-cols-1 gap-6 md:grid-cols-3">
+                {{ text_input("leveling_levelup_channel_id", "Canal de Level Up", config.leveling.levelup_channel_id) }}
+                {{ toggle("leveling_levelup_enabled", "Anúncio de Level Up", config.leveling.levelup_enabled) }}
+                {{ toggle("leveling_levelup_mention", "Mencionar usuário", config.leveling.levelup_mention) }}
+              </div>
+              {{ textarea("leveling_levelup_message", "Mensagem de level up", config.leveling.levelup_message, 3) }}
             </div>
           </section>
 
@@ -268,6 +304,13 @@
   </label>
 {%- endmacro %}
 
+{% macro decimal_input(name, label, value) -%}
+  <label class="block">
+    <span class="mb-2 block text-base text-gray-400">{{ label }}</span>
+    <input class="{{ field_class() }}" name="{{ name }}" value="{{ value }}" type="number" min="0" step="0.1">
+  </label>
+{%- endmacro %}
+
 {% macro color_input(name, label, value) -%}
   <label class="relative block cursor-pointer md:w-1/2">
     <span class="mb-2 block text-base text-gray-400">{{ label }}</span>
@@ -291,6 +334,11 @@
   <label class="flex h-[50px] cursor-pointer items-center justify-between rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-4">
     <span class="text-base text-gray-300">{{ label }}</span>
     <span class="relative flex items-center">
+      <input
+        name="{{ name }}"
+        type="hidden"
+        value="0"
+      >
       <input
         class="peer h-5 w-5 cursor-pointer appearance-none rounded border border-[#444] bg-white/5 transition-all checked:border-cyan-500 checked:bg-cyan-500"
         name="{{ name }}"

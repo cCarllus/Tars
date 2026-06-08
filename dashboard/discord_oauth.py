@@ -13,6 +13,7 @@ from bot.config import settings
 DISCORD_AUTHORIZATION_URL = "https://discord.com/oauth2/authorize"
 DISCORD_TOKEN_URL = "https://discord.com/api/oauth2/token"
 DISCORD_USER_URL = "https://discord.com/api/users/@me"
+DISCORD_MEMBER_URL = "https://discord.com/api/users/@me/guilds/{guild_id}/member"
 OAUTH_TIMEOUT_SECONDS = 10
 DISCORD_API_HEADERS = {
     "Accept": "application/json",
@@ -44,7 +45,7 @@ def build_authorization_url(state: str) -> str:
             "client_id": settings.discord_oauth_client_id,
             "redirect_uri": settings.discord_oauth_redirect_uri,
             "response_type": "code",
-            "scope": "identify",
+            "scope": "identify guilds.members.read",
             "state": state,
             "prompt": "none",
         },
@@ -106,6 +107,29 @@ def fetch_current_user(access_token: str) -> dict[str, Any]:
     if not isinstance(user_payload.get("id"), str):
         raise DiscordOAuthError("Discord não retornou um usuário válido.")
     return user_payload
+
+
+def fetch_current_member_role_ids(access_token: str, guild_id: int) -> tuple[int, ...]:
+    """Fetch the authenticated user's role IDs for a guild."""
+
+    request = Request(
+        DISCORD_MEMBER_URL.format(guild_id=guild_id),
+        headers={
+            **DISCORD_API_HEADERS,
+            "Authorization": f"Bearer {access_token}",
+        },
+        method="GET",
+    )
+    try:
+        with urlopen(request, timeout=OAUTH_TIMEOUT_SECONDS) as response:
+            member_payload = _read_json_response(response.read())
+    except HTTPError as exc:
+        raise DiscordOAuthError(_format_discord_http_error(exc)) from exc
+
+    roles = member_payload.get("roles", [])
+    if not isinstance(roles, list):
+        return ()
+    return tuple(int(str(role_id)) for role_id in roles)
 
 
 def _read_json_response(raw_body: bytes) -> dict[str, Any]:

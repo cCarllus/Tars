@@ -97,21 +97,41 @@ class CoreConfigService:
         config: DashboardConfigModel,
         *,
         actor_user_id: int,
+        actor_role_ids: Iterable[int] = (),
     ) -> None:
         """Persist a complete Dashboard configuration atomically.
 
         Args:
             config: Full replacement configuration submitted by the Dashboard.
             actor_user_id: Discord user ID that submitted the change.
+            actor_role_ids: Discord role IDs available for the actor session.
 
         Raises:
-            DashboardAccessDeniedError: If the actor is not the configured owner.
+            DashboardAccessDeniedError: If the actor is not authorized.
         """
 
         await self.initialize()
+        existing_config = await self._get_persisted_config(config.guild_id)
         configured_owner_id = config.owner_user_id or settings.tars_owner_user_id
-        if configured_owner_id and actor_user_id != configured_owner_id:
-            msg = "Apenas o dono configurado pode alterar a Dashboard."
+        current_allowed_role_ids: set[int] = set()
+        if existing_config is not None:
+            configured_owner_id = (
+                existing_config.owner_user_id
+                or config.owner_user_id
+                or settings.tars_owner_user_id
+            )
+            current_allowed_role_ids = {
+                *existing_config.leveling.xp_staff_role_ids,
+                *existing_config.tickets.staff_role_ids,
+                *existing_config.tickets.admin_role_ids,
+            }
+        actor_role_id_set = set(actor_role_ids)
+        actor_is_owner = bool(
+            configured_owner_id and actor_user_id == configured_owner_id
+        )
+        actor_is_staff = bool(current_allowed_role_ids.intersection(actor_role_id_set))
+        if not actor_is_owner and not actor_is_staff:
+            msg = "Apenas o Owner ou staff configurado pode alterar a Dashboard."
             raise DashboardAccessDeniedError(msg)
 
         updated_at = datetime.now(tz=timezone.utc)  # noqa: UP017
@@ -214,6 +234,24 @@ class CoreConfigService:
             }
             for row in rows
         ]
+
+    async def _get_persisted_config(
+        self,
+        guild_id: int,
+    ) -> DashboardConfigModel | None:
+        row = await asyncio.to_thread(
+            self._fetch_one,
+            """
+            SELECT config_json
+            FROM core_guild_configs
+            WHERE guild_id = ?
+            """,
+            (guild_id,),
+        )
+        if row is None:
+            return None
+        payload = json.loads(str(row["config_json"]))
+        return DashboardConfigModel.from_dict(payload)
 
     def _initialize_sync(self) -> None:
         self.database_path.parent.mkdir(parents=True, exist_ok=True)

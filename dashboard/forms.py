@@ -8,6 +8,10 @@ from dataclasses import dataclass
 from werkzeug.datastructures import MultiDict
 
 from bot.database.models.core_models import (
+    DEFAULT_LEVELUP_MESSAGE,
+    DEFAULT_STAFF_MAX_SET_LEVEL,
+    DEFAULT_STAFF_MAX_XP_PER_COMMAND,
+    DEFAULT_XP_OWNER_USER_ID,
     AutoModConfigModel,
     AutoRoleConfigModel,
     DashboardConfigModel,
@@ -42,6 +46,35 @@ def parse_dashboard_form(form: MultiDict[str, str]) -> DashboardConfigModel:
     owner_user_id = _required_int(form, "owner_user_id", "ID do dono")
 
     ticket_role_ids = _split_int_list(form.get("tickets_staff_role_ids", ""))
+    message_xp_min = _leveling_int(
+        form,
+        "leveling_message_xp_min",
+        "leveling_message_xp",
+        "XP mínimo por mensagem",
+    )
+    message_xp_max = _leveling_int(
+        form,
+        "leveling_message_xp_max",
+        "leveling_message_xp",
+        "XP máximo por mensagem",
+    )
+    voice_xp_min = _leveling_int(
+        form,
+        "leveling_voice_xp_min_per_minute",
+        "leveling_voice_xp_per_minute",
+        "XP mínimo por minuto em voz",
+    )
+    voice_xp_max = _leveling_int(
+        form,
+        "leveling_voice_xp_max_per_minute",
+        "leveling_voice_xp_per_minute",
+        "XP máximo por minuto em voz",
+    )
+    levelup_message = form.get(
+        "leveling_levelup_message",
+        form.get("leveling_level_up_message", DEFAULT_LEVELUP_MESSAGE),
+    )
+    _validate_levelup_message_template(levelup_message)
 
     return DashboardConfigModel(
         guild_id=guild_id,
@@ -65,24 +98,103 @@ def parse_dashboard_form(form: MultiDict[str, str]) -> DashboardConfigModel:
         ),
         leveling=LevelingConfigModel(
             enabled=_checkbox(form, "leveling_enabled"),
-            message_xp=_non_negative_int(
-                form,
-                "leveling_message_xp",
-                "XP por mensagem",
-            ),
+            message_xp_min=min(message_xp_min, message_xp_max),
+            message_xp_max=max(message_xp_min, message_xp_max),
             message_cooldown_seconds=_non_negative_int(
                 form,
                 "leveling_message_cooldown_seconds",
                 "Cooldown de XP",
             ),
-            voice_xp_per_minute=_non_negative_int(
-                form,
-                "leveling_voice_xp_per_minute",
-                "XP por minuto em voz",
+            voice_xp_min_per_minute=min(voice_xp_min, voice_xp_max),
+            voice_xp_max_per_minute=max(voice_xp_min, voice_xp_max),
+            voice_group_bonus_multiplier=max(
+                1.0,
+                _non_negative_float(
+                    form,
+                    "leveling_voice_group_bonus_multiplier",
+                    "Bônus de voz em grupo",
+                    default="1.5",
+                ),
             ),
-            level_xp_factor=max(
+            daily_base_xp=_non_negative_int_default(
+                form,
+                "leveling_daily_base_xp",
+                "XP base do daily",
+                100,
+            ),
+            daily_streak_bonus_xp=_non_negative_int_default(
+                form,
+                "leveling_daily_streak_bonus_xp",
+                "Bônus de streak",
+                20,
+            ),
+            daily_max_streak=max(
                 1,
-                _non_negative_int(form, "leveling_level_xp_factor", "Fator de nível"),
+                _non_negative_int_default(
+                    form,
+                    "leveling_daily_max_streak",
+                    "Streak máximo",
+                    7,
+                ),
+            ),
+            ignored_channel_ids=_split_int_list(
+                form.get("leveling_ignored_channel_ids", ""),
+            ),
+            level_formula_quadratic=_non_negative_int_default(
+                form,
+                "leveling_level_formula_quadratic",
+                "Coeficiente quadrático",
+                5,
+            ),
+            level_formula_linear=_non_negative_int_default(
+                form,
+                "leveling_level_formula_linear",
+                "Coeficiente linear",
+                50,
+            ),
+            level_formula_constant=max(
+                1,
+                _leveling_int(
+                    form,
+                    "leveling_level_formula_constant",
+                    "leveling_level_xp_factor",
+                    "Constante da fórmula",
+                ),
+            ),
+            levelup_channel_id=_optional_int(
+                form.get("leveling_levelup_channel_id"),
+            ),
+            levelup_enabled=_checkbox(
+                form,
+                "leveling_levelup_enabled",
+                default=True,
+            ),
+            levelup_mention=_checkbox(
+                form,
+                "leveling_levelup_mention",
+                default=True,
+            ),
+            levelup_message=levelup_message,
+            xp_owner_user_id=_optional_int_default(
+                form,
+                "leveling_xp_owner_user_id",
+                "Owner do XP",
+                DEFAULT_XP_OWNER_USER_ID,
+            ),
+            xp_staff_role_ids=_split_int_list(
+                form.get("leveling_xp_staff_role_ids", ""),
+            ),
+            staff_max_set_level=_non_negative_int_default(
+                form,
+                "leveling_staff_max_set_level",
+                "Nível máximo para staff",
+                DEFAULT_STAFF_MAX_SET_LEVEL,
+            ),
+            staff_max_xp_per_command=_non_negative_int_default(
+                form,
+                "leveling_staff_max_xp_per_command",
+                "XP máximo por comando para staff",
+                DEFAULT_STAFF_MAX_XP_PER_COMMAND,
             ),
         ),
         tickets=TicketConfigModel(
@@ -192,10 +304,28 @@ def _validate_message_template(message_template: str) -> None:
         ) from exc
 
 
+def _validate_levelup_message_template(message_template: str) -> None:
+    try:
+        message_template.format(
+            user="@Carllos",
+            member="@Carllos",
+            level=10,
+            xp=1234,
+            server="Servidor TARS",
+        )
+    except (KeyError, ValueError) as exc:
+        raise DashboardFormError(
+            (
+                "Mensagem de level up aceita apenas os campos "
+                "{user}, {member}, {level}, {xp} e {server}."
+            ),
+        ) from exc
+
+
 def _checkbox(form: MultiDict[str, str], key: str, *, default: bool = False) -> bool:
     if key not in form:
         return default
-    return form.get(key) in {"1", "on", "true", "True"}
+    return any(value in {"1", "on", "true", "True"} for value in form.getlist(key))
 
 
 def _optional_int(value: str | None) -> int | None:
@@ -214,8 +344,58 @@ def _required_int(form: MultiDict[str, str], key: str, label: str) -> int:
     return value
 
 
+def _optional_int_default(
+    form: MultiDict[str, str],
+    key: str,
+    label: str,
+    default: int,
+) -> int:
+    if key not in form:
+        return default
+    return _required_int(form, key, label)
+
+
 def _non_negative_int(form: MultiDict[str, str], key: str, label: str) -> int:
     value = _required_int(form, key, label)
+    if value < 0:
+        raise DashboardFormError(f"{label} não pode ser negativo.")
+    return value
+
+
+def _non_negative_int_default(
+    form: MultiDict[str, str],
+    key: str,
+    label: str,
+    default: int,
+) -> int:
+    if key not in form:
+        return default
+    return _non_negative_int(form, key, label)
+
+
+def _leveling_int(
+    form: MultiDict[str, str],
+    key: str,
+    fallback_key: str,
+    label: str,
+) -> int:
+    if key in form:
+        return _non_negative_int(form, key, label)
+    return _non_negative_int(form, fallback_key, label)
+
+
+def _non_negative_float(
+    form: MultiDict[str, str],
+    key: str,
+    label: str,
+    *,
+    default: str,
+) -> float:
+    raw_value = form.get(key, default)
+    try:
+        value = float(raw_value)
+    except ValueError as exc:
+        raise DashboardFormError(f"{label} deve ser numérico.") from exc
     if value < 0:
         raise DashboardFormError(f"{label} não pode ser negativo.")
     return value

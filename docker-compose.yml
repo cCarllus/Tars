@@ -23,7 +23,7 @@ services:
     volumes:
       - ./bot/database:/app/bot/database
     ports:
-      - "5000:5000"
+      - "5050:5000"
     restart: unless-stopped
     command:
       [

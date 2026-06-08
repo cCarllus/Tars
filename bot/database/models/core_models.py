@@ -9,6 +9,12 @@ from typing import Any, Self
 
 DEFAULT_WELCOME_COLOR = 0x2ECC71
 DEFAULT_LEAVE_COLOR = 0xE74C3C
+DEFAULT_XP_OWNER_USER_ID = 399757244138520576
+DEFAULT_STAFF_MAX_SET_LEVEL = 15
+DEFAULT_STAFF_MAX_XP_PER_COMMAND = 5000
+DEFAULT_LEVELUP_MESSAGE = (
+    "🎉 {user} subiu para o **nível {level}**! " "Parabéns! Continue evoluindo!"
+)
 
 
 class LogDetailLevel(IntEnum):
@@ -151,36 +157,155 @@ class LevelingConfigModel:
     """Configurable XP behavior for the public leveling feature."""
 
     enabled: bool = True
-    message_xp: int = 15
+    message_xp_min: int = 15
+    message_xp_max: int = 25
     message_cooldown_seconds: int = 60
-    voice_xp_per_minute: int = 5
-    level_xp_factor: int = 100
+    voice_xp_min_per_minute: int = 20
+    voice_xp_max_per_minute: int = 30
+    voice_group_bonus_multiplier: float = 1.5
+    daily_base_xp: int = 100
+    daily_streak_bonus_xp: int = 20
+    daily_max_streak: int = 7
+    ignored_channel_ids: tuple[int, ...] = field(default_factory=tuple)
+    level_formula_quadratic: int = 5
+    level_formula_linear: int = 50
+    level_formula_constant: int = 100
+    levelup_channel_id: int | None = None
+    levelup_enabled: bool = True
+    levelup_mention: bool = True
+    levelup_message: str = DEFAULT_LEVELUP_MESSAGE
+    xp_owner_user_id: int = DEFAULT_XP_OWNER_USER_ID
+    xp_staff_role_ids: tuple[int, ...] = field(default_factory=tuple)
+    staff_max_set_level: int = DEFAULT_STAFF_MAX_SET_LEVEL
+    staff_max_xp_per_command: int = DEFAULT_STAFF_MAX_XP_PER_COMMAND
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the config for JSON persistence."""
 
         return {
             "enabled": self.enabled,
-            "message_xp": self.message_xp,
+            "message_xp_min": self.message_xp_min,
+            "message_xp_max": self.message_xp_max,
             "message_cooldown_seconds": self.message_cooldown_seconds,
-            "voice_xp_per_minute": self.voice_xp_per_minute,
-            "level_xp_factor": self.level_xp_factor,
+            "voice_xp_min_per_minute": self.voice_xp_min_per_minute,
+            "voice_xp_max_per_minute": self.voice_xp_max_per_minute,
+            "voice_group_bonus_multiplier": self.voice_group_bonus_multiplier,
+            "daily_base_xp": self.daily_base_xp,
+            "daily_streak_bonus_xp": self.daily_streak_bonus_xp,
+            "daily_max_streak": self.daily_max_streak,
+            "ignored_channel_ids": list(self.ignored_channel_ids),
+            "level_formula_quadratic": self.level_formula_quadratic,
+            "level_formula_linear": self.level_formula_linear,
+            "level_formula_constant": self.level_formula_constant,
+            "levelup_channel_id": self.levelup_channel_id,
+            "levelup_enabled": self.levelup_enabled,
+            "levelup_mention": self.levelup_mention,
+            "levelup_message": self.levelup_message,
+            "level_up_message": self.levelup_message,
+            "xp_owner_user_id": self.xp_owner_user_id,
+            "xp_staff_role_ids": list(self.xp_staff_role_ids),
+            "staff_max_set_level": self.staff_max_set_level,
+            "staff_max_xp_per_command": self.staff_max_xp_per_command,
         }
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> Self:
         """Deserialize the config from Dashboard JSON."""
 
+        message_xp = payload.get("message_xp")
+        voice_xp = payload.get("voice_xp_per_minute")
         return cls(
             enabled=bool(payload.get("enabled", True)),
-            message_xp=max(0, int(payload.get("message_xp", 15))),
+            message_xp_min=max(
+                0,
+                int(payload.get("message_xp_min", message_xp or 15)),
+            ),
+            message_xp_max=max(
+                0,
+                int(payload.get("message_xp_max", message_xp or 25)),
+            ),
             message_cooldown_seconds=max(
                 0,
                 int(payload.get("message_cooldown_seconds", 60)),
             ),
-            voice_xp_per_minute=max(0, int(payload.get("voice_xp_per_minute", 5))),
-            level_xp_factor=max(1, int(payload.get("level_xp_factor", 100))),
+            voice_xp_min_per_minute=max(
+                0,
+                int(payload.get("voice_xp_min_per_minute", voice_xp or 20)),
+            ),
+            voice_xp_max_per_minute=max(
+                0,
+                int(payload.get("voice_xp_max_per_minute", voice_xp or 30)),
+            ),
+            voice_group_bonus_multiplier=max(
+                1.0,
+                float(payload.get("voice_group_bonus_multiplier", 1.5)),
+            ),
+            daily_base_xp=max(0, int(payload.get("daily_base_xp", 100))),
+            daily_streak_bonus_xp=max(
+                0,
+                int(payload.get("daily_streak_bonus_xp", 20)),
+            ),
+            daily_max_streak=max(1, int(payload.get("daily_max_streak", 7))),
+            ignored_channel_ids=_int_tuple(payload.get("ignored_channel_ids", [])),
+            level_formula_quadratic=max(
+                0,
+                int(payload.get("level_formula_quadratic", 5)),
+            ),
+            level_formula_linear=max(0, int(payload.get("level_formula_linear", 50))),
+            level_formula_constant=max(
+                1,
+                int(payload.get("level_formula_constant", 100)),
+            ),
+            levelup_channel_id=_optional_int(payload.get("levelup_channel_id")),
+            levelup_enabled=bool(payload.get("levelup_enabled", True)),
+            levelup_mention=bool(payload.get("levelup_mention", True)),
+            levelup_message=str(
+                payload.get("levelup_message")
+                or payload.get("level_up_message")
+                or DEFAULT_LEVELUP_MESSAGE,
+            ),
+            xp_owner_user_id=int(
+                payload.get("xp_owner_user_id", DEFAULT_XP_OWNER_USER_ID),
+            ),
+            xp_staff_role_ids=_int_tuple(payload.get("xp_staff_role_ids", [])),
+            staff_max_set_level=max(
+                0,
+                int(payload.get("staff_max_set_level", DEFAULT_STAFF_MAX_SET_LEVEL)),
+            ),
+            staff_max_xp_per_command=max(
+                0,
+                int(
+                    payload.get(
+                        "staff_max_xp_per_command",
+                        DEFAULT_STAFF_MAX_XP_PER_COMMAND,
+                    ),
+                ),
+            ),
         )
+
+    @property
+    def message_xp(self) -> int:
+        """Return the minimum message XP for legacy callers."""
+
+        return self.message_xp_min
+
+    @property
+    def voice_xp_per_minute(self) -> int:
+        """Return the minimum voice XP for legacy callers."""
+
+        return self.voice_xp_min_per_minute
+
+    @property
+    def level_xp_factor(self) -> int:
+        """Return the default formula constant for legacy callers."""
+
+        return self.level_formula_constant
+
+    @property
+    def level_up_message(self) -> str:
+        """Return the level-up template for legacy callers."""
+
+        return self.levelup_message
 
 
 @dataclass(frozen=True)

@@ -17,6 +17,7 @@ from bot.database.models.ticket_models import TicketType
 from bot.services.core_config_service import CoreConfigService
 from bot.services.leveling_service import LevelingService
 from bot.services.ticket_service import TicketService
+from bot.services.xp_service import XPService
 from dashboard.app import create_app
 
 
@@ -74,6 +75,14 @@ def test_dashboard_saves_config_through_core_service(
     assert loaded.auto_mod.blocked_words == ("spam", "phishing")
     assert loaded.leveling.message_xp == 25
     assert loaded.leveling.level_xp_factor == 200
+    assert loaded.leveling.levelup_channel_id == 44
+    assert loaded.leveling.levelup_enabled is True
+    assert loaded.leveling.levelup_mention is False
+    assert loaded.leveling.levelup_message == "{user} subiu para {level} com {xp} XP."
+    assert loaded.leveling.xp_owner_user_id == 399757244138520576
+    assert loaded.leveling.xp_staff_role_ids == (987654321, 123456789)
+    assert loaded.leveling.staff_max_set_level == 15
+    assert loaded.leveling.staff_max_xp_per_command == 5000
     assert loaded.tickets.triage_channel_id == 30
     assert loaded.tickets.staff_role_ids == (31, 32)
     assert loaded.tickets.judge_role_ids == (31, 32)
@@ -114,6 +123,45 @@ def test_leveling_service_reads_dashboard_xp_config(
     assert record is not None
     assert record.xp == 25
     assert record.level == 0
+
+
+def test_levels_dashboard_saves_levelup_settings(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Ensure the Levels page persists dedicated level-up announcement settings."""
+
+    _configure_dashboard_settings(monkeypatch)
+    database_path = tmp_path / "tars.sqlite3"
+    config_service = CoreConfigService(database_path)
+    levels_service = XPService(database_path, config_service=config_service)
+    app = create_app(config_service, levels_service=levels_service)
+    app.config.update(TESTING=True)
+    client = app.test_client()
+    _authenticate_client(client)
+
+    page_response = client.get("/dashboard/levels?guild_id=123")
+    save_response = client.post(
+        "/dashboard/levels/settings?guild_id=123",
+        data={
+            "csrf_token": "csrf-token",
+            "leveling_levelup_channel_id": "777",
+            "leveling_levelup_enabled": "0",
+            "leveling_levelup_mention": "0",
+            "leveling_levelup_message": "{user} chegou ao nível {level} no {server}.",
+        },
+    )
+    loaded = asyncio.run(config_service.get_config(123))
+
+    assert page_response.status_code == 200
+    assert b"An\xc3\xbancios de Level Up" in page_response.data
+    assert save_response.status_code == 302
+    assert loaded.leveling.levelup_channel_id == 777
+    assert loaded.leveling.levelup_enabled is False
+    assert loaded.leveling.levelup_mention is False
+    assert loaded.leveling.levelup_message == (
+        "{user} chegou ao nível {level} no {server}."
+    )
 
 
 def test_dashboard_lists_tickets_with_filters(
@@ -205,6 +253,14 @@ def _dashboard_payload() -> dict[str, str]:
         "leveling_message_cooldown_seconds": "30",
         "leveling_voice_xp_per_minute": "8",
         "leveling_level_xp_factor": "200",
+        "leveling_levelup_channel_id": "44",
+        "leveling_levelup_enabled": "1",
+        "leveling_levelup_mention": "0",
+        "leveling_levelup_message": "{user} subiu para {level} com {xp} XP.",
+        "leveling_xp_owner_user_id": "399757244138520576",
+        "leveling_xp_staff_role_ids": "987654321\n123456789\n987654321",
+        "leveling_staff_max_set_level": "15",
+        "leveling_staff_max_xp_per_command": "5000",
         "tickets_triage_channel_id": "30",
         "tickets_transcript_channel_id": "33",
         "tickets_staff_role_ids": "31\n32\n31",

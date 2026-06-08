@@ -15,10 +15,17 @@ from dashboard.discord_oauth import (
     DiscordOAuthError,
     build_authorization_url,
     exchange_code_for_token,
+    fetch_current_member_role_ids,
     fetch_current_user,
     oauth_is_configured,
 )
-from dashboard.security import SESSION_USER_ID_KEY, validate_csrf
+from dashboard.security import (
+    SESSION_GUILD_ID_KEY,
+    SESSION_ROLE_IDS_KEY,
+    SESSION_USER_ID_KEY,
+    dashboard_actor_can_access,
+    validate_csrf,
+)
 
 auth_blueprint = Blueprint("auth", __name__)
 audit_logger = logging.getLogger("tars.dashboard.audit")
@@ -104,7 +111,24 @@ def discord_callback() -> ResponseReturnValue:
         return redirect(url_for("auth.login"))
 
     user_id = int(str(discord_user["id"]))
-    if not settings.tars_owner_user_id or user_id != settings.tars_owner_user_id:
+    role_ids: tuple[int, ...] = ()
+    if settings.tars_guild_id:
+        try:
+            role_ids = fetch_current_member_role_ids(
+                access_token,
+                settings.tars_guild_id,
+            )
+        except (DiscordOAuthError, URLError, TimeoutError):
+            if user_id != settings.tars_owner_user_id:
+                logger.exception("Discord member role lookup failed")
+
+    session[SESSION_USER_ID_KEY] = user_id
+    session[SESSION_ROLE_IDS_KEY] = list(role_ids)
+    session[SESSION_GUILD_ID_KEY] = settings.tars_guild_id
+    if not settings.tars_owner_user_id or not dashboard_actor_can_access(
+        user_id,
+        role_ids,
+    ):
         audit_logger.warning(
             "dashboard_access_denied user_id=%s owner_user_id=%s",
             user_id,
@@ -113,7 +137,6 @@ def discord_callback() -> ResponseReturnValue:
         session.clear()
         return redirect(url_for("auth.access_denied"))
 
-    session[SESSION_USER_ID_KEY] = user_id
     audit_logger.info("dashboard_login_success user_id=%s", user_id)
     return redirect(url_for("config.dashboard"))
 
