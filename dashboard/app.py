@@ -11,11 +11,13 @@ from flask import Flask
 from bot.config import settings
 from bot.logger import logger
 from bot.services.core_config_service import CoreConfigService, core_config_service
+from bot.services.log_service import LogService, log_service
 from bot.services.ticket_service import TicketService, ticket_service_singleton
 from bot.services.xp_service import XPService, xp_service
 from dashboard.blueprints.auth import auth_blueprint
 from dashboard.blueprints.config import config_blueprint
 from dashboard.blueprints.levels import levels_blueprint
+from dashboard.blueprints.logs import logs_blueprint
 from dashboard.blueprints.tickets import tickets_blueprint
 from dashboard.security import csrf_token
 
@@ -26,6 +28,7 @@ def create_app(
     config_service: CoreConfigService | None = None,
     ticket_service: TicketService | None = None,
     levels_service: XPService | None = None,
+    rich_log_service: LogService | None = None,
 ) -> Flask:
     """Create and configure the Flask Dashboard application."""
 
@@ -34,6 +37,7 @@ def create_app(
     app.extensions["core_config_service"] = config_service or core_config_service
     app.extensions["ticket_service"] = ticket_service or ticket_service_singleton
     app.extensions["xp_service"] = levels_service or xp_service
+    app.extensions["log_service"] = rich_log_service or log_service
 
     _configure_dashboard_audit_logger()
     app.jinja_env.globals["csrf_token"] = csrf_token
@@ -42,6 +46,7 @@ def create_app(
     app.register_blueprint(config_blueprint)
     app.register_blueprint(tickets_blueprint)
     app.register_blueprint(levels_blueprint)
+    app.register_blueprint(logs_blueprint)
     return app
 
 

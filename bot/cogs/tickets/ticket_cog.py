@@ -11,6 +11,7 @@ from discord import app_commands
 from discord.ext import commands, tasks
 
 from bot.database.models.core_models import TicketConfigModel
+from bot.database.models.log_models import LogCategory
 from bot.database.models.ticket_models import (
     TicketModel,
     TicketType,
@@ -19,6 +20,7 @@ from bot.database.models.ticket_models import (
 from bot.logger import logger
 from bot.services.audit_log_service import audit_log_service
 from bot.services.core_config_service import CoreConfigService, core_config_service
+from bot.services.log_service import log_service
 from bot.services.ticket_service import (
     TicketService,
     TicketStateError,
@@ -910,6 +912,18 @@ class TicketCog(commands.Cog, name="TicketCog"):
             )
             return
 
+        await self._log_ticket_action(
+            guild=guild,
+            ticket=ticket,
+            event_type="tribunal_vote",
+            title="Voto no Tribunal",
+            description=(
+                f"<@{interaction.user.id}> votou "
+                f"**{_decision_label(choice)}** no Ticket #{ticket.id:04d}."
+            ),
+            actor_user_id=interaction.user.id,
+        )
+
         if tally.decision_reached and tally.decision is not None:
             await self._apply_tribunal_decision(
                 guild=guild,
@@ -1656,15 +1670,17 @@ class TicketCog(commands.Cog, name="TicketCog"):
             details=description,
             payload=payload,
         )
-        await audit_log_service.log_event(
+        await log_service.record_system_event(
             guild=guild,
+            guild_id=guild.id,
             event_type=event_type,
             title=title,
             description=description,
             payload=payload,
             actor_user_id=actor_user_id,
             target_user_id=ticket.target_user_id,
-            color=INFO_COLOR,
+            category=LogCategory.SYSTEM,
+            color=int(INFO_COLOR),
         )
 
     def _member_can_manage_ticket(

@@ -20,7 +20,9 @@ from flask import (
 from flask.typing import ResponseReturnValue
 
 from bot.config import settings
+from bot.database.models.log_models import LogCategory
 from bot.database.models.ticket_models import TicketStatus, TicketType
+from bot.services.log_service import LogService
 from bot.services.ticket_service import TicketService
 from dashboard.security import (
     SESSION_GUILD_ID_KEY,
@@ -96,6 +98,24 @@ def close_ticket(ticket_id: int) -> ResponseReturnValue:
             },
         ),
     )
+    _run_async(
+        _log_service().record_system_event(
+            guild=None,
+            guild_id=closed.guild_id,
+            event_type="ticket_closed_dashboard",
+            title="Ticket fechado pela Dashboard",
+            description=f"Ticket #{closed.id:04d} fechado diretamente pela Dashboard.",
+            payload={
+                "ticket_id": closed.id,
+                "ticket_type": closed.ticket_type.value,
+                "status": closed.status.value,
+            },
+            actor_user_id=actor_user_id,
+            target_user_id=closed.target_user_id,
+            category=LogCategory.SYSTEM,
+            color=0x9B59B6,
+        ),
+    )
     flash(f"Ticket #{ticket_id:04d} fechado.", "success")
     return redirect(url_for("tickets.list_tickets", guild_id=_resolve_guild_id()))
 
@@ -156,6 +176,10 @@ def _resolve_guild_id() -> int:
 
 def _ticket_service() -> TicketService:
     return cast(TicketService, current_app.extensions["ticket_service"])
+
+
+def _log_service() -> LogService:
+    return cast(LogService, current_app.extensions["log_service"])
 
 
 def _run_async(awaitable: Coroutine[Any, Any, T]) -> T:

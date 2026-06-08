@@ -9,6 +9,7 @@ from werkzeug.datastructures import MultiDict
 
 from bot.database.models.core_models import (
     DEFAULT_LEVELUP_MESSAGE,
+    DEFAULT_LOG_EVENT_TYPES,
     DEFAULT_STAFF_MAX_SET_LEVEL,
     DEFAULT_STAFF_MAX_XP_PER_COMMAND,
     DEFAULT_XP_OWNER_USER_ID,
@@ -81,12 +82,7 @@ def parse_dashboard_form(form: MultiDict[str, str]) -> DashboardConfigModel:
         owner_user_id=owner_user_id,
         welcome=_parse_embed_config(form, "welcome"),
         leave=_parse_embed_config(form, "leave"),
-        logs=LogConfigModel(
-            channel_id=_optional_int(form.get("logs_channel_id")),
-            detail_level=LogDetailLevel(
-                _required_int(form, "logs_detail_level", "logs"),
-            ),
-        ),
+        logs=_parse_log_config(form),
         auto_role=AutoRoleConfigModel(
             role_id=_optional_int(form.get("auto_role_id")),
             enabled=_checkbox(form, "auto_role_enabled"),
@@ -279,6 +275,52 @@ def _parse_embed_config(
         message_template=message_template,
         embed_color=_parse_color(form.get(f"{prefix}_embed_color", "")),
         enabled=_checkbox(form, f"{prefix}_enabled"),
+    )
+
+
+def _parse_log_config(form: MultiDict[str, str]) -> LogConfigModel:
+    enabled_events = tuple(
+        event
+        for event in DEFAULT_LOG_EVENT_TYPES
+        if _checkbox(form, f"logs_event_{event}", default=True)
+    )
+    return LogConfigModel(
+        channel_id=_optional_int(form.get("logs_channel_id")),
+        detail_level=LogDetailLevel(
+            _required_int(form, "logs_detail_level", "logs"),
+        ),
+        moderation_channel_id=_optional_int(
+            form.get("logs_moderation_channel_id"),
+        ),
+        member_channel_id=_optional_int(form.get("logs_member_channel_id")),
+        message_channel_id=_optional_int(form.get("logs_message_channel_id")),
+        profile_channel_id=_optional_int(form.get("logs_profile_channel_id")),
+        voice_channel_id=_optional_int(form.get("logs_voice_channel_id")),
+        system_channel_id=_optional_int(form.get("logs_system_channel_id")),
+        xp_economy_channel_id=_optional_int(
+            form.get("logs_xp_economy_channel_id"),
+        ),
+        enabled_event_types=enabled_events or DEFAULT_LOG_EVENT_TYPES,
+        ignore_bots=_checkbox(form, "logs_ignore_bots", default=True),
+        ignored_role_ids=_split_int_list(form.get("logs_ignored_role_ids", "")),
+        ignored_channel_ids=_split_int_list(
+            form.get("logs_ignored_channel_ids", ""),
+        ),
+        retention_days=max(
+            1,
+            _non_negative_int_default(
+                form,
+                "logs_retention_days",
+                "Retenção de logs",
+                90,
+            ),
+        ),
+        persist_message_content=_checkbox(
+            form,
+            "logs_persist_message_content",
+            default=True,
+        ),
+        webhooks_enabled=_checkbox(form, "logs_webhooks_enabled"),
     )
 
 

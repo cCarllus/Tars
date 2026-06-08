@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}Logs | TARS Dashboard{% endblock %}
+
+{% block content %}
+  <header class="sticky top-0 z-50 border-b border-white/10 bg-[#0A0A0A]/80 backdrop-blur-md">
+    <div class="mx-auto flex max-w-[90rem] items-center justify-between gap-6 px-6 py-4">
+      <div class="flex items-center gap-4">
+        <a
+          class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-purple-500 to-cyan-500 shadow-[0_0_15px_rgba(168,85,247,0.3)]"
+          href="{{ url_for('config.dashboard') }}"
+          aria-label="TARS Dashboard"
+        >
+          <i data-lucide="bot" class="h-6 w-6 text-white" stroke-width="1.5"></i>
+        </a>
+        <div>
+          <h1 class="text-2xl font-semibold leading-tight tracking-tight text-white">Logs</h1>
+          <p class="text-base text-gray-500">Auditoria rica do servidor e sistemas TARS</p>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center justify-end gap-3 text-base text-gray-400">
+        <a class="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-gray-300 transition-colors hover:border-white/20 hover:text-white" href="{{ url_for('config.dashboard', guild_id=guild_id) }}">
+          <i data-lucide="settings" class="h-4 w-4" stroke-width="1.5"></i>
+          Config
+        </a>
+        <a class="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-gray-300 transition-colors hover:border-white/20 hover:text-white" href="{{ url_for('tickets.list_tickets', guild_id=guild_id) }}">
+          <i data-lucide="ticket" class="h-4 w-4" stroke-width="1.5"></i>
+          Tickets
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <div class="mx-auto max-w-[90rem] px-6 py-8">
+    <form class="mb-6 rounded-2xl border border-white/10 bg-[#111] p-5 shadow-sm" method="get" action="{{ url_for('logs.logs_dashboard') }}">
+      <input type="hidden" name="guild_id" value="{{ guild_id }}">
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
+        {{ text_input("q", "Busca", search, "search") }}
+        <label class="block">
+          <span class="mb-2 block text-sm text-gray-400">Categoria</span>
+          <select class="{{ field_class() }}" name="category">
+            <option value="">Todas</option>
+            {% for category in categories %}
+              <option value="{{ category.value }}" {% if selected_category == category.value %}selected{% endif %}>{{ category.value }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="block">
+          <span class="mb-2 block text-sm text-gray-400">Evento</span>
+          <select class="{{ field_class() }}" name="event_type">
+            <option value="">Todos</option>
+            {% for event_type in event_types %}
+              <option value="{{ event_type }}" {% if selected_event_type == event_type %}selected{% endif %}>{{ event_type }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        {{ text_input("user_id", "Usuário", selected_user_id, "numeric") }}
+        {{ text_input("actor_user_id", "Executor", selected_actor_user_id, "numeric") }}
+        {{ text_input("channel_id", "Canal", selected_channel_id, "numeric") }}
+      </div>
+      <div class="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <p class="text-sm text-gray-500">{{ events|length }} eventos carregados</p>
+        <div class="flex flex-wrap gap-3">
+          <a class="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-4 py-2 text-sm text-gray-300 transition-colors hover:border-white/20 hover:text-white" href="{{ url_for('logs.export_logs', guild_id=guild_id, q=search, category=selected_category, event_type=selected_event_type, user_id=selected_user_id, actor_user_id=selected_actor_user_id, channel_id=selected_channel_id) }}">
+            <i data-lucide="download" class="h-4 w-4" stroke-width="1.5"></i>
+            Exportar CSV
+          </a>
+          <button class="flex items-center gap-2 rounded-lg bg-cyan-400 px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-cyan-300" type="submit">
+            <i data-lucide="filter" class="h-4 w-4" stroke-width="2"></i>
+            Filtrar
+          </button>
+        </div>
+      </div>
+    </form>
+
+    <section class="overflow-hidden rounded-2xl border border-white/10 bg-[#111] shadow-sm">
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-white/10 text-left">
+          <thead class="bg-[#0A0A0A] text-xs uppercase tracking-wide text-gray-500">
+            <tr>
+              <th class="px-4 py-3">Quando</th>
+              <th class="px-4 py-3">Evento</th>
+              <th class="px-4 py-3">Descrição</th>
+              <th class="px-4 py-3">IDs</th>
+              <th class="px-4 py-3">Dados</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-white/5">
+            {% for event in events %}
+              <tr class="align-top transition-colors hover:bg-white/[0.02]">
+                <td class="whitespace-nowrap px-4 py-4 font-mono text-xs text-gray-500">{{ event.created_at.strftime("%d/%m/%Y %H:%M:%S") }}</td>
+                <td class="px-4 py-4">
+                  <div class="flex flex-col gap-1">
+                    <span class="text-sm font-semibold text-white">{{ event.title }}</span>
+                    <span class="w-fit rounded-md border border-white/10 bg-[#0A0A0A] px-2 py-1 font-mono text-xs text-cyan-300">{{ event.event_type }}</span>
+                    <span class="text-xs text-gray-500">{{ event.category.value }}</span>
+                  </div>
+                </td>
+                <td class="max-w-xl px-4 py-4 text-sm leading-6 text-gray-300">{{ event.description }}</td>
+                <td class="px-4 py-4 font-mono text-xs text-gray-500">
+                  <div>log: {{ event.id }}</div>
+                  {% if event.actor_user_id %}<div>actor: {{ event.actor_user_id }}</div>{% endif %}
+                  {% if event.target_user_id %}<div>target: {{ event.target_user_id }}</div>{% endif %}
+                  {% if event.channel_id %}<div>canal: {{ event.channel_id }}</div>{% endif %}
+                  {% if event.message_id %}<div>msg: {{ event.message_id }}</div>{% endif %}
+                </td>
+                <td class="max-w-md px-4 py-4">
+                  <pre class="max-h-32 overflow-auto whitespace-pre-wrap rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] p-3 text-xs text-gray-400">{{ event.payload }}</pre>
+                </td>
+              </tr>
+            {% else %}
+              <tr>
+                <td class="px-4 py-10 text-center text-sm text-gray-500" colspan="5">Nenhum log encontrado.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+{% endblock %}
+
+{% macro field_class() -%}
+  w-full rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-2.5 text-sm text-gray-200 shadow-inner outline-none transition-all focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20
+{%- endmacro %}
+
+{% macro text_input(name, label, value, mode) -%}
+  <label class="block">
+    <span class="mb-2 block text-sm text-gray-400">{{ label }}</span>
+    <input class="{{ field_class() }}" name="{{ name }}" value="{{ value or '' }}" inputmode="{{ mode }}">
+  </label>
+{%- endmacro %}

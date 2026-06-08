@@ -21,6 +21,7 @@ from flask import (
 from flask.typing import ResponseReturnValue
 
 from bot.config import settings
+from bot.database.models.core_models import DEFAULT_LOG_EVENT_TYPES
 from bot.services.core_config_service import (
     CoreConfigService,
     DashboardAccessDeniedError,
@@ -66,6 +67,7 @@ def dashboard() -> ResponseReturnValue:
         audit_events=audit_events,
         owner_user_id=settings.tars_owner_user_id,
         tars_guild_id=settings.tars_guild_id,
+        log_event_types=DEFAULT_LOG_EVENT_TYPES,
     )
 
 

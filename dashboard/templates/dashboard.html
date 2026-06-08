@@ -28,6 +28,13 @@
         </a>
         <a
           class="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-gray-300 transition-colors hover:border-white/20 hover:text-white"
+          href="{{ url_for('logs.logs_dashboard', guild_id=config.guild_id or tars_guild_id) }}"
+        >
+          <i data-lucide="activity" class="h-4 w-4" stroke-width="1.5"></i>
+          Logs
+        </a>
+        <a
+          class="flex items-center gap-2 rounded-lg border border-[#2A2A2A] bg-[#111] px-3 py-2 text-sm text-gray-300 transition-colors hover:border-white/20 hover:text-white"
           href="{{ url_for('levels.levels_dashboard', guild_id=config.guild_id or tars_guild_id) }}"
         >
           <i data-lucide="zap" class="h-4 w-4" stroke-width="1.5"></i>
@@ -64,6 +71,7 @@
             {{ nav_item("#welcome", "user-plus", "Welcome", "text-cyan-400") }}
             {{ nav_item("#leave", "user-minus", "Leave", "text-red-400") }}
             {{ nav_item("#canais", "radio", "Canais e cargos", "text-amber-400") }}
+            {{ nav_item("#logs", "activity", "Logs", "text-purple-400") }}
             {{ nav_item("#tickets", "ticket", "Tickets", "text-emerald-400") }}
             {{ nav_item("#moderacao", "shield-alert", "Auto-moderação", "text-purple-400") }}
             {{ nav_item("#xp", "zap", "XP", "text-blue-400") }}
@@ -109,17 +117,53 @@
           <section class="rounded-2xl border border-white/10 bg-[#111] p-6 shadow-sm" id="canais">
             {{ section_title("radio", "Canais e cargos", "text-amber-400") }}
             <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-              {{ text_input("logs_channel_id", "Canal de logs", config.logs.channel_id) }}
-              <label class="block">
-                <span class="mb-2 block text-base text-gray-400">Nível de logs</span>
-                <select class="{{ field_class() }}" name="logs_detail_level">
-                  <option value="1" {% if config.logs.detail_level == 1 %}selected{% endif %}>Básico</option>
-                  <option value="2" {% if config.logs.detail_level == 2 %}selected{% endif %}>Normal</option>
-                  <option value="3" {% if config.logs.detail_level == 3 %}selected{% endif %}>Detalhado</option>
-                </select>
-              </label>
               {{ toggle("auto_role_enabled", "Cargo automático", config.auto_role.enabled) }}
               {{ text_input("auto_role_id", "Cargo automático", config.auto_role.role_id) }}
+            </div>
+          </section>
+
+          <section class="rounded-2xl border border-white/10 bg-[#111] p-6 shadow-sm" id="logs">
+            {{ section_title("activity", "Logs", "text-purple-400") }}
+            <div class="space-y-6">
+              <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                {{ text_input("logs_channel_id", "Canal principal", config.logs.channel_id) }}
+                <label class="block">
+                  <span class="mb-2 block text-base text-gray-400">Nível no Discord</span>
+                  <select class="{{ field_class() }}" name="logs_detail_level">
+                    <option value="1" {% if config.logs.detail_level == 1 %}selected{% endif %}>Básico</option>
+                    <option value="2" {% if config.logs.detail_level == 2 %}selected{% endif %}>Normal</option>
+                    <option value="3" {% if config.logs.detail_level == 3 %}selected{% endif %}>Detalhado</option>
+                  </select>
+                </label>
+                {{ text_input("logs_moderation_channel_id", "Canal moderação", config.logs.moderation_channel_id) }}
+                {{ text_input("logs_member_channel_id", "Canal member activity", config.logs.member_channel_id) }}
+                {{ text_input("logs_message_channel_id", "Canal message logs", config.logs.message_channel_id) }}
+                {{ text_input("logs_profile_channel_id", "Canal avatar/username", config.logs.profile_channel_id) }}
+                {{ text_input("logs_voice_channel_id", "Canal voice", config.logs.voice_channel_id) }}
+                {{ text_input("logs_system_channel_id", "Canal tickets/tribunal", config.logs.system_channel_id) }}
+                {{ text_input("logs_xp_economy_channel_id", "Canal XP/economia", config.logs.xp_economy_channel_id) }}
+                {{ number_input("logs_retention_days", "Retenção (dias)", config.logs.retention_days) }}
+              </div>
+              <div class="grid grid-cols-1 gap-6 md:grid-cols-3">
+                {{ toggle("logs_ignore_bots", "Ignorar bots", config.logs.ignore_bots) }}
+                {{ toggle("logs_persist_message_content", "Persistir conteúdo", config.logs.persist_message_content) }}
+                {{ toggle("logs_webhooks_enabled", "Webhooks internos", config.logs.webhooks_enabled) }}
+              </div>
+              <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                {{ textarea("logs_ignored_role_ids", "Cargos ignorados", config.logs.ignored_role_ids|join("\n"), 3) }}
+                {{ textarea("logs_ignored_channel_ids", "Canais ignorados", config.logs.ignored_channel_ids|join("\n"), 3) }}
+              </div>
+              <div>
+                <div class="mb-3 flex items-center gap-2">
+                  <i data-lucide="list-checks" class="h-4 w-4 text-purple-300" stroke-width="1.5"></i>
+                  <h3 class="text-base font-medium text-white">Eventos ativos</h3>
+                </div>
+                <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {% for event_type in log_event_types %}
+                    {{ compact_toggle("logs_event_" ~ event_type, event_type, event_type in config.logs.enabled_event_types) }}
+                  {% endfor %}
+                </div>
+              </div>
             </div>
           </section>
 
@@ -347,6 +391,23 @@
         {% if checked %}checked{% endif %}
       >
       <i data-lucide="check" class="pointer-events-none absolute inset-0 m-auto h-3.5 w-3.5 text-black opacity-0 peer-checked:opacity-100" stroke-width="3"></i>
+    </span>
+  </label>
+{%- endmacro %}
+
+{% macro compact_toggle(name, label, checked) -%}
+  <label class="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-2">
+    <span class="break-all font-mono text-xs text-gray-300">{{ label }}</span>
+    <span class="relative flex shrink-0 items-center">
+      <input name="{{ name }}" type="hidden" value="0">
+      <input
+        class="peer h-4 w-4 cursor-pointer appearance-none rounded border border-[#444] bg-white/5 transition-all checked:border-cyan-500 checked:bg-cyan-500"
+        name="{{ name }}"
+        type="checkbox"
+        value="1"
+        {% if checked %}checked{% endif %}
+      >
+      <i data-lucide="check" class="pointer-events-none absolute inset-0 m-auto h-3 w-3 text-black opacity-0 peer-checked:opacity-100" stroke-width="3"></i>
     </span>
   </label>
 {%- endmacro %}

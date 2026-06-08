@@ -11,7 +11,9 @@ from discord.ext import commands, tasks
 
 from bot.database.models.core_models import DEFAULT_LEVELUP_MESSAGE
 from bot.database.models.level_models import UserLevelModel, XPGainResult
+from bot.database.models.log_models import LogCategory
 from bot.logger import logger
+from bot.services.log_service import log_service
 from bot.services.xp_service import XPService
 from bot.utils.locks import lock_registry
 from bot.utils.xp_utils import (
@@ -496,6 +498,23 @@ class LevelsCog(commands.Cog):
                 member.guild.id,
                 member.id,
             )
+        await log_service.record_system_event(
+            guild=member.guild,
+            guild_id=member.guild.id,
+            event_type="level_up",
+            title="Level up",
+            description=(
+                f"{member.mention} subiu para o nível {result.user_level.level}."
+            ),
+            payload={
+                "level": result.user_level.level,
+                "xp": result.user_level.xp,
+            },
+            actor_user_id=member.id,
+            target_user_id=member.id,
+            category=LogCategory.XP_ECONOMY,
+            color=0x2ECC71,
+        )
 
     def _resolve_levelup_channel(
         self,
@@ -581,7 +600,6 @@ class LevelsCog(commands.Cog):
         detail: str,
         actor_label: str,
     ) -> None:
-        config = await self.service.config_service.get_config(guild.id)
         logger.info(
             (
                 "XP admin action guild_id=%s actor_id=%s target_id=%s "
@@ -594,21 +612,17 @@ class LevelsCog(commands.Cog):
             detail,
             actor_label,
         )
-        if config.logs.channel_id is None:
-            return
-
-        channel = guild.get_channel(config.logs.channel_id)
-        if not isinstance(channel, discord.abc.Messageable):
-            return
-
-        await channel.send(
-            embed=create_xp_audit_embed(
-                actor=actor,
-                target=target,
-                action=action,
-                detail=detail,
-                actor_label=actor_label,
-            ),
+        await log_service.record_system_event(
+            guild=guild,
+            guild_id=guild.id,
+            event_type="xp_admin_action",
+            title="Comando administrativo de XP",
+            description=f"{actor.mention} executou {action} em {target.mention}.",
+            payload={"action": action, "detail": detail, "actor_label": actor_label},
+            actor_user_id=actor.id,
+            target_user_id=target.id,
+            category=LogCategory.XP_ECONOMY,
+            color=0x3498DB,
         )
 
     def _format_leaderboard(

@@ -16,6 +16,7 @@ from bot.config import settings
 from bot.database.models.ticket_models import TicketType
 from bot.services.core_config_service import CoreConfigService
 from bot.services.leveling_service import LevelingService
+from bot.services.log_service import LogService
 from bot.services.ticket_service import TicketService
 from bot.services.xp_service import XPService
 from dashboard.app import create_app
@@ -69,6 +70,20 @@ def test_dashboard_saves_config_through_core_service(
     assert loaded.leave.enabled is False
     assert loaded.logs.channel_id == 11
     assert int(loaded.logs.detail_level) == 3
+    assert loaded.logs.moderation_channel_id == 111
+    assert loaded.logs.member_channel_id == 112
+    assert loaded.logs.message_channel_id == 113
+    assert loaded.logs.profile_channel_id == 114
+    assert loaded.logs.voice_channel_id == 115
+    assert loaded.logs.system_channel_id == 116
+    assert loaded.logs.xp_economy_channel_id == 117
+    assert loaded.logs.ignore_bots is True
+    assert loaded.logs.ignored_role_ids == (201, 202)
+    assert loaded.logs.ignored_channel_ids == (301, 302)
+    assert loaded.logs.retention_days == 45
+    assert loaded.logs.persist_message_content is True
+    assert loaded.logs.webhooks_enabled is True
+    assert "message_delete" in loaded.logs.enabled_event_types
     assert loaded.auto_role.role_id == 12
     assert loaded.auto_mod.block_links is False
     assert loaded.auto_mod.allowed_links == ()
@@ -213,6 +228,43 @@ def test_dashboard_lists_tickets_with_filters(
     assert action_logs[0].action == "ticket_closed_dashboard"
 
 
+def test_logs_dashboard_lists_and_exports_events(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Ensure the dedicated logs dashboard can filter and export rich events."""
+
+    _configure_dashboard_settings(monkeypatch)
+    database_path = tmp_path / "tars.sqlite3"
+    config_service = CoreConfigService(database_path)
+    log_service = LogService(database_path, config_service=config_service)
+    asyncio.run(
+        log_service.record_system_event(
+            guild=None,
+            guild_id=123,
+            event_type="ticket_created",
+            title="Ticket criado",
+            description="Ticket #0001 criado para teste.",
+            payload={"ticket_id": 1},
+            actor_user_id=7,
+            target_user_id=8,
+        ),
+    )
+    app = create_app(config_service, rich_log_service=log_service)
+    app.config.update(TESTING=True)
+    client = app.test_client()
+    _authenticate_client(client)
+
+    page_response = client.get("/dashboard/logs?guild_id=123&q=Ticket")
+    export_response = client.get("/dashboard/logs/export.csv?guild_id=123")
+
+    assert page_response.status_code == 200
+    assert b"Ticket criado" in page_response.data
+    assert b"ticket_created" in page_response.data
+    assert export_response.status_code == 200
+    assert b"ticket_created" in export_response.data
+
+
 def _configure_dashboard_settings(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "tars_owner_user_id", 42)
     monkeypatch.setattr(settings, "tars_guild_id", 123)
@@ -241,6 +293,20 @@ def _dashboard_payload() -> dict[str, str]:
         "leave_message_template": "{member} saiu do {server}.",
         "logs_channel_id": "11",
         "logs_detail_level": "3",
+        "logs_moderation_channel_id": "111",
+        "logs_member_channel_id": "112",
+        "logs_message_channel_id": "113",
+        "logs_profile_channel_id": "114",
+        "logs_voice_channel_id": "115",
+        "logs_system_channel_id": "116",
+        "logs_xp_economy_channel_id": "117",
+        "logs_ignore_bots": "1",
+        "logs_ignored_role_ids": "201\n202\n201",
+        "logs_ignored_channel_ids": "301\n302\n301",
+        "logs_retention_days": "45",
+        "logs_persist_message_content": "1",
+        "logs_webhooks_enabled": "1",
+        "logs_event_message_delete": "1",
         "auto_role_enabled": "1",
         "auto_role_id": "12",
         "auto_mod_enabled": "1",

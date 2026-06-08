@@ -15,6 +15,42 @@ DEFAULT_STAFF_MAX_XP_PER_COMMAND = 5000
 DEFAULT_LEVELUP_MESSAGE = (
     "🎉 {user} subiu para o **nível {level}**! " "Parabéns! Continue evoluindo!"
 )
+DEFAULT_LOG_RETENTION_DAYS = 90
+DEFAULT_LOG_EVENT_TYPES = (
+    "member_join",
+    "member_leave",
+    "member_ban",
+    "member_unban",
+    "member_kick",
+    "member_timeout_add",
+    "member_timeout_remove",
+    "member_nick_update",
+    "user_avatar_update",
+    "user_username_update",
+    "voice_join",
+    "voice_leave",
+    "voice_move",
+    "voice_mute",
+    "voice_unmute",
+    "voice_deafen",
+    "voice_undeafen",
+    "message_edit",
+    "message_delete",
+    "message_bulk_delete",
+    "reaction_add",
+    "reaction_remove",
+    "ticket_created",
+    "ticket_closed",
+    "ticket_closed_dashboard",
+    "ticket_escalated",
+    "ticket_expired",
+    "tribunal_vote",
+    "tribunal_decision",
+    "level_up",
+    "xp_admin_action",
+    "economy_action",
+    "admin_command",
+)
 
 
 class LogDetailLevel(IntEnum):
@@ -64,6 +100,20 @@ class LogConfigModel:
 
     channel_id: int | None = None
     detail_level: LogDetailLevel = LogDetailLevel.NORMAL
+    moderation_channel_id: int | None = None
+    member_channel_id: int | None = None
+    message_channel_id: int | None = None
+    profile_channel_id: int | None = None
+    voice_channel_id: int | None = None
+    system_channel_id: int | None = None
+    xp_economy_channel_id: int | None = None
+    enabled_event_types: tuple[str, ...] = DEFAULT_LOG_EVENT_TYPES
+    ignore_bots: bool = True
+    ignored_role_ids: tuple[int, ...] = field(default_factory=tuple)
+    ignored_channel_ids: tuple[int, ...] = field(default_factory=tuple)
+    retention_days: int = DEFAULT_LOG_RETENTION_DAYS
+    persist_message_content: bool = True
+    webhooks_enabled: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the config for JSON persistence."""
@@ -71,6 +121,20 @@ class LogConfigModel:
         return {
             "channel_id": self.channel_id,
             "detail_level": int(self.detail_level),
+            "moderation_channel_id": self.moderation_channel_id,
+            "member_channel_id": self.member_channel_id,
+            "message_channel_id": self.message_channel_id,
+            "profile_channel_id": self.profile_channel_id,
+            "voice_channel_id": self.voice_channel_id,
+            "system_channel_id": self.system_channel_id,
+            "xp_economy_channel_id": self.xp_economy_channel_id,
+            "enabled_event_types": list(self.enabled_event_types),
+            "ignore_bots": self.ignore_bots,
+            "ignored_role_ids": list(self.ignored_role_ids),
+            "ignored_channel_ids": list(self.ignored_channel_ids),
+            "retention_days": self.retention_days,
+            "persist_message_content": self.persist_message_content,
+            "webhooks_enabled": self.webhooks_enabled,
         }
 
     @classmethod
@@ -80,6 +144,25 @@ class LogConfigModel:
         return cls(
             channel_id=_optional_int(payload.get("channel_id")),
             detail_level=LogDetailLevel(int(payload.get("detail_level", 2))),
+            moderation_channel_id=_optional_int(payload.get("moderation_channel_id")),
+            member_channel_id=_optional_int(payload.get("member_channel_id")),
+            message_channel_id=_optional_int(payload.get("message_channel_id")),
+            profile_channel_id=_optional_int(payload.get("profile_channel_id")),
+            voice_channel_id=_optional_int(payload.get("voice_channel_id")),
+            system_channel_id=_optional_int(payload.get("system_channel_id")),
+            xp_economy_channel_id=_optional_int(payload.get("xp_economy_channel_id")),
+            enabled_event_types=_log_event_tuple(
+                payload.get("enabled_event_types", DEFAULT_LOG_EVENT_TYPES),
+            ),
+            ignore_bots=bool(payload.get("ignore_bots", True)),
+            ignored_role_ids=_int_tuple(payload.get("ignored_role_ids", [])),
+            ignored_channel_ids=_int_tuple(payload.get("ignored_channel_ids", [])),
+            retention_days=max(
+                1,
+                int(payload.get("retention_days", DEFAULT_LOG_RETENTION_DAYS)),
+            ),
+            persist_message_content=bool(payload.get("persist_message_content", True)),
+            webhooks_enabled=bool(payload.get("webhooks_enabled", False)),
         )
 
 
@@ -467,6 +550,13 @@ def _int_tuple(value: object) -> tuple[int, ...]:
     if not isinstance(value, list | tuple):
         return ()
     return tuple(int(str(item)) for item in value if str(item).strip())
+
+
+def _log_event_tuple(value: object) -> tuple[str, ...]:
+    if not isinstance(value, list | tuple):
+        return DEFAULT_LOG_EVENT_TYPES
+    events = tuple(str(item).strip() for item in value if str(item).strip())
+    return events or DEFAULT_LOG_EVENT_TYPES
 
 
 def _parse_optional_datetime(value: object) -> datetime:
